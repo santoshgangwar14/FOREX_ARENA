@@ -63,8 +63,8 @@ export const APP_ASSET_SPREADS: Record<TradeSymbol, number> = {
 
 // Default fallbacks / baseline prices
 export const BASELINE_PRICES: Record<TradeSymbol, number> = {
-  XAUUSD: 2350.00,
-  XAGUSD: 28.500,
+  XAUUSD: 4150.00,
+  XAGUSD: 61.500,
   EURUSD: 1.08500,
   GBPUSD: 1.27500,
   USDJPY: 156.500,
@@ -193,6 +193,9 @@ class PriceService {
       const freshPrices = { ...this.prices };
 
       (Object.keys(freshPrices) as TradeSymbol[]).forEach((sym) => {
+        if (sym === 'XAUUSD' || sym === 'XAGUSD') {
+          return; // Skip artificial jitter / baseline constraint for live metals
+        }
         const prev = freshPrices[sym];
         const spread = APP_ASSET_SPREADS[sym];
         const digits = APP_MARKET_ASSETS[sym].digits;
@@ -289,9 +292,35 @@ class PriceService {
       );
     }
 
-    // 2. Fetch Indices and Metals (SPX500, US30, NAS100, XAUUSD, XAGUSD) from Yahoo Finance Spark API
+    // 2. Fetch Spot Metals (XAUUSD, XAGUSD) from Gold-API.com (Free, Centralized, CORS-enabled, Live Source)
     try {
-      const symbols = '%5EGSPC,%5EDJI,%5ENDX,GC%3DF,SI%3DF';
+      const [xauRes, xagRes] = await Promise.all([
+        this.fetchWithRetry('https://api.gold-api.com/price/XAU'),
+        this.fetchWithRetry('https://api.gold-api.com/price/XAG')
+      ]);
+      const xauJson = await xauRes.json();
+      const xagJson = await xagRes.json();
+      
+      const xauPrice = parseFloat(xauJson?.price);
+      const xagPrice = parseFloat(xagJson?.price);
+      
+      if (!isNaN(xauPrice)) {
+        updatedPrices['XAUUSD'] = xauPrice;
+        const prevClose = BASELINE_PRICES['XAUUSD'];
+        updatedChanges['XAUUSD'] = ((xauPrice - prevClose) / prevClose) * 100;
+      }
+      if (!isNaN(xagPrice)) {
+        updatedPrices['XAGUSD'] = xagPrice;
+        const prevClose = BASELINE_PRICES['XAGUSD'];
+        updatedChanges['XAGUSD'] = ((xagPrice - prevClose) / prevClose) * 100;
+      }
+    } catch (metalsErr) {
+      console.error('Gold-API metals fetch failed:', metalsErr);
+    }
+
+    // 3. Fetch Indices (SPX500, US30, NAS100) from Yahoo Finance Spark API
+    try {
+      const symbols = '%5EGSPC,%5EDJI,%5ENDX';
       const url = `https://api.allorigins.win/get?url=${encodeURIComponent(
         `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols}`
       )}`;
@@ -305,8 +334,6 @@ class PriceService {
             '^GSPC': 'SPX500',
             '^DJI': 'US30',
             '^NDX': 'NAS100',
-            'GC=F': 'XAUUSD',
-            'SI=F': 'XAGUSD',
           };
 
           result.forEach((item: any) => {
@@ -333,8 +360,6 @@ class PriceService {
         { sym: 'SPX500' as TradeSymbol, yahooSym: '%5EGSPC' },
         { sym: 'US30' as TradeSymbol, yahooSym: '%5EDJI' },
         { sym: 'NAS100' as TradeSymbol, yahooSym: '%5ENDX' },
-        { sym: 'XAUUSD' as TradeSymbol, yahooSym: 'GC%3DF' },
-        { sym: 'XAGUSD' as TradeSymbol, yahooSym: 'SI%3DF' },
       ];
 
       await Promise.all(
@@ -391,9 +416,6 @@ class PriceService {
         
         if (rates.EUR && rates.JPY) updatedPrices['EURJPY'] = (1 / rates.EUR) * rates.JPY;
         if (rates.GBP && rates.JPY) updatedPrices['GBPJPY'] = (1 / rates.GBP) * rates.JPY;
-
-        if (rates.XAU) updatedPrices['XAUUSD'] = 1 / rates.XAU;
-        if (rates.XAG) updatedPrices['XAGUSD'] = 1 / rates.XAG;
       }
     } catch (err) {
       console.warn('ER-API Forex fetch failed, falling back to Frankfurter API:', err);

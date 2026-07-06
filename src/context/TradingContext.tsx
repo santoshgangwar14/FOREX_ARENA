@@ -178,16 +178,24 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       const asset = MARKET_ASSETS[trade.symbol];
       let currentPrice = trade.type === 'buy' ? freshPrice.bid : freshPrice.ask;
 
+      // Safety check: Prevent temporary baseline initialization drops from liquidating trades on page refresh
+      const baseline = BASELINE_PRICES[trade.symbol];
+      const isStillAtBaseline = Math.abs(currentPrice - baseline) < (baseline * 0.015);
+      const isTradeFarFromBaseline = Math.abs(trade.openPrice - baseline) > (baseline * 0.15);
+      const isUnresolvedFetch = isStillAtBaseline && isTradeFarFromBaseline;
+
       // Handle SL/TP limits trigger simulation!
       // This is incredibly rich behavior: if prices hit SL/TP, the trade is automatically auto-closed!
       let shouldAutoClose = false;
-      if (trade.sl) {
-        if (trade.type === 'buy' && currentPrice <= trade.sl) shouldAutoClose = true;
-        if (trade.type === 'sell' && currentPrice >= trade.sl) shouldAutoClose = true;
-      }
-      if (trade.tp) {
-        if (trade.type === 'buy' && currentPrice >= trade.tp) shouldAutoClose = true;
-        if (trade.type === 'sell' && currentPrice <= trade.tp) shouldAutoClose = true;
+      if (!isUnresolvedFetch) {
+        if (trade.sl) {
+          if (trade.type === 'buy' && currentPrice <= trade.sl) shouldAutoClose = true;
+          if (trade.type === 'sell' && currentPrice >= trade.sl) shouldAutoClose = true;
+        }
+        if (trade.tp) {
+          if (trade.type === 'buy' && currentPrice >= trade.tp) shouldAutoClose = true;
+          if (trade.type === 'sell' && currentPrice <= trade.tp) shouldAutoClose = true;
+        }
       }
 
       if (shouldAutoClose) {
@@ -200,10 +208,15 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       // pnl = (CurrentBid - OpenPrice) * Lots * ContractSize for buy
       // pnl = (OpenPrice - CurrentAsk) * Lots * ContractSize for sell
       let tradePnl = 0;
-      if (trade.type === 'buy') {
-        tradePnl = (currentPrice - trade.openPrice) * trade.lots * asset.contractSize;
+      if (isUnresolvedFetch) {
+        // Retain saved profit/loss to prevent visual jitter or margin stopout before API response
+        tradePnl = trade.pnl || 0;
       } else {
-        tradePnl = (trade.openPrice - currentPrice) * trade.lots * asset.contractSize;
+        if (trade.type === 'buy') {
+          tradePnl = (currentPrice - trade.openPrice) * trade.lots * asset.contractSize;
+        } else {
+          tradePnl = (trade.openPrice - currentPrice) * trade.lots * asset.contractSize;
+        }
       }
 
       // Convert JPY pairs P/L to USD for standard quote currency simplicity
@@ -248,6 +261,15 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         if (!freshPrice) return;
         const asset = MARKET_ASSETS[t.symbol];
         let currentPrice = t.type === 'buy' ? freshPrice.bid : freshPrice.ask;
+
+        // Apply unresolved fetch protection here too
+        const baseline = BASELINE_PRICES[t.symbol];
+        const isStillAtBaseline = Math.abs(currentPrice - baseline) < (baseline * 0.015);
+        const isTradeFarFromBaseline = Math.abs(t.openPrice - baseline) > (baseline * 0.15);
+        if (isStillAtBaseline && isTradeFarFromBaseline) {
+          return; // Skip stopout evaluation during unresolved fetch
+        }
+
         let tradePnl = t.type === 'buy' ? (currentPrice - t.openPrice) : (t.openPrice - currentPrice);
         tradePnl = tradePnl * t.lots * asset.contractSize;
         if (tradePnl < worstLoss) {
