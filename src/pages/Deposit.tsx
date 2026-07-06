@@ -14,6 +14,7 @@ export default function Deposit() {
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,11 +154,16 @@ export default function Deposit() {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText('TXN9fM1U2cQ8vM5T6rB4eG9sY2zK5wV8pH');
-                    alert('USDT TRC20 address copied to clipboard!');
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="px-3 py-1.5 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-300 hover:border-zinc-700 hover:text-white rounded-lg transition-all shrink-0"
+                  className={`px-3 py-1.5 border text-xs font-bold rounded-lg transition-all shrink-0 ${
+                    copied
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white'
+                  }`}
                 >
-                  Copy Address
+                  {copied ? 'Copied!' : 'Copy Address'}
                 </button>
               </div>
 

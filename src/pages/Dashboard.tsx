@@ -71,82 +71,148 @@ export default function Dashboard() {
       {/* Metrics Bento Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Balance Card */}
-        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 text-zinc-800 group-hover:text-amber-500/10 transition-colors">
-            <DollarSign className="w-16 h-16 -mr-4 -mt-4 stroke-[1]" />
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40 group-hover:text-amber-500/10 transition-colors">
+            <DollarSign className="w-12 h-12 -mr-2 -mt-2 stroke-[1]" />
           </div>
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
             Balance
           </p>
-          <p className="text-2xl font-bold text-white font-mono mt-2">
+          <p className="text-2xl font-bold text-white font-mono mt-1.5">
             {formatCurrency(wallet?.balance)}
           </p>
-          <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
             <span className="text-zinc-500">Starting:</span>
-            <span className="font-semibold font-mono">$10,000.00</span>
+            <span className="font-semibold font-mono text-zinc-300">$10,000.00</span>
           </div>
         </div>
 
         {/* Equity Card */}
-        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 relative overflow-hidden group shadow-[0_0_20px_rgba(245,158,11,0.02)]">
-          <div className="absolute top-0 right-0 p-3 text-zinc-800 group-hover:text-amber-500/10 transition-colors">
-            <Briefcase className="w-16 h-16 -mr-4 -mt-4 stroke-[1]" />
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group shadow-[0_0_20px_rgba(245,158,11,0.02)]">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40 group-hover:text-amber-500/10 transition-colors">
+            <Briefcase className="w-12 h-12 -mr-2 -mt-2 stroke-[1]" />
           </div>
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
             Equity
           </p>
-          <p className="text-2xl font-bold text-amber-400 font-mono mt-2">
+          <p className="text-2xl font-bold text-amber-400 font-mono mt-1.5">
             {formatCurrency(wallet?.equity)}
           </p>
-          <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
-            <span className="text-zinc-500">Active Float:</span>
-            <span className={`font-mono font-bold ${todayFloatingPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-              {todayFloatingPL >= 0 ? '+' : ''}{formatCurrency(todayFloatingPL)}
-            </span>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Net Value:</span>
+            <span className="font-semibold font-mono text-zinc-300">{formatCurrency(wallet?.equity)}</span>
+          </div>
+        </div>
+
+        {/* Floating P/L Card */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40">
+            {todayFloatingPL >= 0 ? (
+              <TrendingUp className="w-12 h-12 -mr-2 -mt-2 stroke-[1] text-emerald-500/5 group-hover:text-emerald-500/10 transition-colors" />
+            ) : (
+              <TrendingDown className="w-12 h-12 -mr-2 -mt-2 stroke-[1] text-rose-500/5 group-hover:text-rose-500/10 transition-colors" />
+            )}
+          </div>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+            Floating P/L
+          </p>
+          <p className={`text-2xl font-bold font-mono mt-1.5 ${todayFloatingPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+            {todayFloatingPL >= 0 ? '+' : ''}{formatCurrency(todayFloatingPL)}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Active Positions:</span>
+            <span className="font-semibold font-mono text-zinc-300">{openTrades.length}</span>
           </div>
         </div>
 
         {/* Today's P/L Card */}
-        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 text-zinc-800">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40">
             {todayTotalPL >= 0 ? (
-              <TrendingUp className="w-16 h-16 -mr-4 -mt-4 stroke-[1] text-emerald-500/5 group-hover:text-emerald-500/10 transition-colors" />
+              <TrendingUp className="w-12 h-12 -mr-2 -mt-2 stroke-[1] text-emerald-500/5" />
             ) : (
-              <TrendingDown className="w-16 h-16 -mr-4 -mt-4 stroke-[1] text-rose-500/5 group-hover:text-rose-500/10 transition-colors" />
+              <TrendingDown className="w-12 h-12 -mr-2 -mt-2 stroke-[1] text-rose-500/5" />
             )}
           </div>
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
             Today's P/L
           </p>
-          <p className={`text-2xl font-bold font-mono mt-2 ${todayTotalPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+          <p className={`text-2xl font-bold font-mono mt-1.5 ${todayTotalPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
             {todayTotalPL >= 0 ? '+' : ''}{formatCurrency(todayTotalPL)}
           </p>
-          <div className="mt-4 flex items-center gap-2 text-xs">
-            <span className="text-zinc-500">Day Target:</span>
-            <span className="text-emerald-400 font-semibold font-mono">+5.0% ($500)</span>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Closed + Floating:</span>
+            <span className={`font-semibold font-mono ${todayTotalPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+              {todayTotalPL >= 0 ? '+' : ''}{formatCurrency(todayTotalPL)}
+            </span>
           </div>
         </div>
 
-        {/* Margin Details Card */}
-        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 text-zinc-800 group-hover:text-amber-500/10 transition-colors">
-            <Layers className="w-16 h-16 -mr-4 -mt-4 stroke-[1]" />
+        {/* Used Margin Card */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40">
+            <Layers className="w-12 h-12 -mr-2 -mt-2 stroke-[1]" />
           </div>
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
-            Margin Level
+            Used Margin
           </p>
-          <p className="text-2xl font-bold text-white font-mono mt-2">
+          <p className="text-2xl font-bold text-white font-mono mt-1.5">
+            {formatCurrency(wallet?.margin)}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Reserved Cap:</span>
+            <span className="font-semibold font-mono text-zinc-300">1:100 Leverage</span>
+          </div>
+        </div>
+
+        {/* Free Margin Card */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40">
+            <Layers className="w-12 h-12 -mr-2 -mt-2 stroke-[1]" />
+          </div>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+            Free Margin
+          </p>
+          <p className="text-2xl font-bold text-white font-mono mt-1.5">
+            {formatCurrency(wallet?.freeMargin)}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Available to open:</span>
+            <span className="font-semibold font-mono text-zinc-300">{formatCurrency(wallet?.freeMargin)}</span>
+          </div>
+        </div>
+
+        {/* Margin Level % Card */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40">
+            <Activity className="w-12 h-12 -mr-2 -mt-2 stroke-[1]" />
+          </div>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+            Margin Level %
+          </p>
+          <p className="text-2xl font-bold text-white font-mono mt-1.5">
             {marginLevel !== null ? `${marginLevel.toFixed(1)}%` : '∞'}
           </p>
-          <div className="mt-4 flex justify-between text-xs text-zinc-400">
-            <div>
-              <span className="text-zinc-500">Margin: </span>
-              <span className="font-semibold font-mono text-zinc-200">{formatCurrency(wallet?.margin)}</span>
-            </div>
-            <div>
-              <span className="text-zinc-500">Free: </span>
-              <span className="font-semibold font-mono text-zinc-200">{formatCurrency(wallet?.freeMargin)}</span>
-            </div>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Stop-out Level:</span>
+            <span className="font-semibold font-mono text-rose-500">50.0%</span>
+          </div>
+        </div>
+
+        {/* Evaluation Target Card */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 text-zinc-800/40">
+            <ArrowUpRight className="w-12 h-12 -mr-2 -mt-2 stroke-[1]" />
+          </div>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+            Funded Target
+          </p>
+          <p className="text-2xl font-bold text-emerald-400 font-mono mt-1.5">
+            {wallet ? `${Math.min(100, Math.max(0, (wallet.balance / 11000) * 100)).toFixed(1)}%` : '0%'}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-400">
+            <span className="text-zinc-500">Target:</span>
+            <span className="font-semibold font-mono text-zinc-300">$11,000.00 (+10%)</span>
           </div>
         </div>
       </div>

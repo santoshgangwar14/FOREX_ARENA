@@ -47,12 +47,16 @@ export type TradeSymbol =
   | 'ETHUSD'
   | 'SOLUSD'
   | 'BNBUSD'
-  | 'XRPUSD';
+  | 'XRPUSD'
+  // Indices
+  | 'NAS100'
+  | 'US30'
+  | 'SPX500';
 
 export interface MarketAsset {
   symbol: TradeSymbol;
   name: string;
-  category: 'Metals' | 'Forex' | 'Crypto';
+  category: 'Metals' | 'Forex' | 'Crypto' | 'Indices';
   contractSize: number;
   pipSize: number; // For pip & P/L calculation
   basePrice: number;

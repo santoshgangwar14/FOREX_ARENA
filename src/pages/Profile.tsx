@@ -10,6 +10,7 @@ export default function Profile() {
   const [resetting, setResetting] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   const formatCurrency = (val: number | undefined) => {
     if (val === undefined) return '$0.00';
@@ -30,12 +31,6 @@ export default function Profile() {
 
   const handleAccountReset = async () => {
     if (!currentUser || !wallet) return;
-
-    const confirmReset = window.confirm(
-      'Are you sure you want to reset your account? This will permanently close all open trades, delete all closed trade history, and reset your wallet balance back to $10,000.00.'
-    );
-
-    if (!confirmReset) return;
 
     try {
       setResetting(true);
@@ -173,15 +168,50 @@ export default function Profile() {
                 Resetting your account will delete your complete trading history logs and reload your cash reserves back to $10,000. This action is permanent and cannot be undone. Use it to restart your evaluation journey from scratch.
               </p>
 
-              <button
-                id="reset-account-btn"
-                onClick={handleAccountReset}
-                disabled={resetting}
-                className="px-5 py-3 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40 text-rose-400 rounded-xl text-xs font-bold transition-all duration-150 flex items-center gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${resetting ? 'animate-spin' : ''}`} />
-                {resetting ? 'Resetting Account...' : 'Reset Sandbox Wallet ($10,000)'}
-              </button>
+              {showConfirmReset ? (
+                <div className="p-4 bg-red-950/20 border border-red-500/20 rounded-xl space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-200">Are you absolutely sure?</p>
+                      <p className="text-xs text-zinc-400 mt-1">This will permanently close active positions, clear trade records, and set balance to $10,000. This cannot be reversed.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 justify-end pt-1">
+                    <button
+                      id="cancel-reset-btn"
+                      type="button"
+                      onClick={() => setShowConfirmReset(false)}
+                      className="px-4 py-2 bg-zinc-900 border border-zinc-850 hover:bg-zinc-805 hover:border-zinc-800 text-zinc-300 rounded-lg text-xs font-bold transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      id="confirm-reset-btn"
+                      type="button"
+                      disabled={resetting}
+                      onClick={async () => {
+                        await handleAccountReset();
+                        setShowConfirmReset(false);
+                      }}
+                      className="px-4 py-2 bg-rose-500 hover:bg-rose-600 active:scale-95 text-zinc-950 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
+                      {resetting ? 'Resetting...' : 'Yes, Reset Wallet'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  id="reset-account-btn"
+                  onClick={() => setShowConfirmReset(true)}
+                  disabled={resetting}
+                  className="px-5 py-3 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40 text-rose-400 rounded-xl text-xs font-bold transition-all duration-150 flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Reset Sandbox Wallet ($10,000)
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -15,51 +15,35 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Trade, TradeSymbol, MarketAsset, Wallet, Deposit } from '../types';
 
-export const MARKET_ASSETS: Record<TradeSymbol, MarketAsset> = {
-  XAUUSD: { symbol: 'XAUUSD', name: 'Gold', category: 'Metals', contractSize: 100, pipSize: 0.01, basePrice: 2352.45, digits: 2 },
-  XAGUSD: { symbol: 'XAGUSD', name: 'Silver', category: 'Metals', contractSize: 5000, pipSize: 0.001, basePrice: 28.35, digits: 3 },
-  EURUSD: { symbol: 'EURUSD', name: 'Euro vs US Dollar', category: 'Forex', contractSize: 100000, pipSize: 0.0001, basePrice: 1.0852, digits: 5 },
-  GBPUSD: { symbol: 'GBPUSD', name: 'Great Britain Pound vs US Dollar', category: 'Forex', contractSize: 100000, pipSize: 0.0001, basePrice: 1.2743, digits: 5 },
-  USDJPY: { symbol: 'USDJPY', name: 'US Dollar vs Japanese Yen', category: 'Forex', contractSize: 100000, pipSize: 0.01, basePrice: 156.42, digits: 3 },
-  USDCHF: { symbol: 'USDCHF', name: 'US Dollar vs Swiss Franc', category: 'Forex', contractSize: 100000, pipSize: 0.0001, basePrice: 0.8924, digits: 5 },
-  USDCAD: { symbol: 'USDCAD', name: 'US Dollar vs Canadian Dollar', category: 'Forex', contractSize: 100000, pipSize: 0.0001, basePrice: 1.3654, digits: 5 },
-  AUDUSD: { symbol: 'AUDUSD', name: 'Australian Dollar vs US Dollar', category: 'Forex', contractSize: 100000, pipSize: 0.0001, basePrice: 0.6672, digits: 5 },
-  NZDUSD: { symbol: 'NZDUSD', name: 'New Zealand Dollar vs US Dollar', category: 'Forex', contractSize: 100000, pipSize: 0.0001, basePrice: 0.6125, digits: 5 },
-  EURJPY: { symbol: 'EURJPY', name: 'Euro vs Japanese Yen', category: 'Forex', contractSize: 100000, pipSize: 0.01, basePrice: 169.54, digits: 3 },
-  GBPJPY: { symbol: 'GBPJPY', name: 'Great Britain Pound vs Japanese Yen', category: 'Forex', contractSize: 100000, pipSize: 0.01, basePrice: 199.15, digits: 3 },
-  BTCUSD: { symbol: 'BTCUSD', name: 'Bitcoin', category: 'Crypto', contractSize: 1, pipSize: 1, basePrice: 68425.0, digits: 2 },
-  ETHUSD: { symbol: 'ETHUSD', name: 'Ethereum', category: 'Crypto', contractSize: 1, pipSize: 0.01, basePrice: 3552.4, digits: 2 },
-  SOLUSD: { symbol: 'SOLUSD', name: 'Solana', category: 'Crypto', contractSize: 10, pipSize: 0.01, basePrice: 145.65, digits: 2 },
-  BNBUSD: { symbol: 'BNBUSD', name: 'BNB', category: 'Crypto', contractSize: 10, pipSize: 0.01, basePrice: 582.3, digits: 2 },
-  XRPUSD: { symbol: 'XRPUSD', name: 'Ripple', category: 'Crypto', contractSize: 1000, pipSize: 0.0001, basePrice: 0.4855, digits: 4 },
-};
+import {
+  priceService,
+  PriceData as ServicePriceData,
+  APP_MARKET_ASSETS,
+  APP_ASSET_SPREADS,
+  BASELINE_PRICES,
+} from '../services/priceService';
 
-// Simulated spreads in pips/points
-export const ASSET_SPREADS: Record<TradeSymbol, number> = {
-  XAUUSD: 0.35, // 35 cents
-  XAGUSD: 0.02, // 2 cents
-  EURUSD: 0.00012, // 1.2 pips
-  GBPUSD: 0.00018, // 1.8 pips
-  USDJPY: 0.015, // 1.5 pips
-  USDCHF: 0.00016,
-  USDCAD: 0.00017,
-  AUDUSD: 0.00015,
-  NZDUSD: 0.00018,
-  EURJPY: 0.018,
-  GBPJPY: 0.025,
-  BTCUSD: 12.5, // $12.50 spread
-  ETHUSD: 1.2, // $1.20 spread
-  SOLUSD: 0.15, // 15 cents
-  BNBUSD: 0.4,
-  XRPUSD: 0.0008,
-};
+export const MARKET_ASSETS: Record<TradeSymbol, MarketAsset> = {} as Record<TradeSymbol, MarketAsset>;
+(Object.keys(APP_MARKET_ASSETS) as TradeSymbol[]).forEach((sym) => {
+  MARKET_ASSETS[sym] = {
+    ...APP_MARKET_ASSETS[sym],
+    basePrice: BASELINE_PRICES[sym],
+  } as MarketAsset;
+});
 
-interface PriceData {
+export const ASSET_SPREADS = APP_ASSET_SPREADS;
+
+export interface PriceData {
   bid: number;
   ask: number;
   lastPrice: number;
   changePercent: number;
+  direction?: 'up' | 'down' | 'neutral';
+  high: number;
+  low: number;
+  lastUpdate: number;
 }
+
 
 interface TradingContextType {
   prices: Record<TradeSymbol, PriceData>;
@@ -92,21 +76,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [loadingTrades, setLoadingTrades] = useState(true);
 
-  // Prices state initialized with base prices
-  const [prices, setPrices] = useState<Record<TradeSymbol, PriceData>>(() => {
-    const initialPrices = {} as Record<TradeSymbol, PriceData>;
-    (Object.keys(MARKET_ASSETS) as TradeSymbol[]).forEach((sym) => {
-      const asset = MARKET_ASSETS[sym];
-      const spread = ASSET_SPREADS[sym];
-      initialPrices[sym] = {
-        bid: asset.basePrice - spread / 2,
-        ask: asset.basePrice + spread / 2,
-        lastPrice: asset.basePrice,
-        changePercent: (Math.random() * 4 - 2), // random starting daily change %
-      };
-    });
-    return initialPrices;
-  });
+  // Prices state initialized from Price Service
+  const [prices, setPrices] = useState<Record<TradeSymbol, PriceData>>(() => priceService.getLatestPrices());
 
   // Use a ref to keep prices fresh inside callbacks without re-triggering effects
   const pricesRef = useRef<Record<TradeSymbol, PriceData>>(prices);
@@ -114,149 +85,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     pricesRef.current = prices;
   }, [prices]);
 
-  // Fetch real-world prices to anchor our live tick simulator
-  const syncWithRealPrices = async () => {
-    try {
-      const erResponse = await fetch('https://open.er-api.com/v6/latest/USD');
-      let erData: any = null;
-      if (erResponse.ok) {
-        erData = await erResponse.json();
-      }
-
-      const cryptoSymbols = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP'];
-      const cryptoPrices: Record<string, number> = {};
-
-      await Promise.all(
-        cryptoSymbols.map(async (coin) => {
-          try {
-            const res = await fetch(`https://api.coinbase.com/v2/prices/${coin}-USD/spot`);
-            if (res.ok) {
-              const data = await res.json();
-              const price = parseFloat(data?.data?.amount);
-              if (!isNaN(price)) {
-                cryptoPrices[`${coin}USD`] = price;
-              }
-            }
-          } catch (e) {
-            console.error(`Error fetching Coinbase price for ${coin}:`, e);
-          }
-        })
-      );
-
-      const updatedBasePrices: Partial<Record<TradeSymbol, number>> = {};
-
-      if (erData && erData.rates) {
-        const rates = erData.rates;
-        if (rates.EUR) updatedBasePrices['EURUSD'] = 1 / rates.EUR;
-        if (rates.GBP) updatedBasePrices['GBPUSD'] = 1 / rates.GBP;
-        if (rates.JPY) updatedBasePrices['USDJPY'] = rates.JPY;
-        if (rates.CHF) updatedBasePrices['USDCHF'] = rates.CHF;
-        if (rates.CAD) updatedBasePrices['USDCAD'] = rates.CAD;
-        if (rates.AUD) updatedBasePrices['AUDUSD'] = 1 / rates.AUD;
-        if (rates.NZD) updatedBasePrices['NZDUSD'] = 1 / rates.NZD;
-        
-        if (rates.EUR && rates.JPY) updatedBasePrices['EURJPY'] = (1 / rates.EUR) * rates.JPY;
-        if (rates.GBP && rates.JPY) updatedBasePrices['GBPJPY'] = (1 / rates.GBP) * rates.JPY;
-
-        if (rates.XAU) {
-          updatedBasePrices['XAUUSD'] = 1 / rates.XAU;
-        }
-        if (rates.XAG) {
-          updatedBasePrices['XAGUSD'] = 1 / rates.XAG;
-        }
-      }
-
-      cryptoSymbols.forEach((coin) => {
-        const sym = `${coin}USD` as TradeSymbol;
-        if (cryptoPrices[sym]) {
-          updatedBasePrices[sym] = cryptoPrices[sym];
-        }
-      });
-
-      setPrices((prevPrices) => {
-        const nextPrices = { ...prevPrices };
-        (Object.keys(updatedBasePrices) as TradeSymbol[]).forEach((sym) => {
-          const realPrice = updatedBasePrices[sym];
-          if (realPrice === undefined || isNaN(realPrice)) return;
-
-          // Mutate MARKET_ASSETS dynamically so standard limits check in the tick simulator works
-          if (MARKET_ASSETS[sym]) {
-            MARKET_ASSETS[sym].basePrice = realPrice;
-          }
-
-          const asset = MARKET_ASSETS[sym];
-          const spread = ASSET_SPREADS[sym];
-          const digits = asset?.digits ?? 2;
-
-          const bid = parseFloat((realPrice - spread / 2).toFixed(digits));
-          const ask = parseFloat((realPrice + spread / 2).toFixed(digits));
-          const prevChange = prevPrices[sym]?.changePercent ?? (Math.random() * 4 - 2);
-
-          nextPrices[sym] = {
-            bid,
-            ask,
-            lastPrice: realPrice,
-            changePercent: prevChange,
-          };
-        });
-        return nextPrices;
-      });
-    } catch (error) {
-      console.error('Error syncing real-world prices:', error);
-    }
-  };
-
-  // Sync real-world prices on mount and every 15 seconds
+  // Synchronize with the central Price Service singleton
   useEffect(() => {
-    syncWithRealPrices();
-    const syncInterval = setInterval(syncWithRealPrices, 15000);
-    return () => clearInterval(syncInterval);
-  }, []);
-
-  // Real-time market tick generator simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPrices((prevPrices) => {
-        const nextPrices = { ...prevPrices };
-        (Object.keys(MARKET_ASSETS) as TradeSymbol[]).forEach((sym) => {
-          const prev = prevPrices[sym];
-          const asset = MARKET_ASSETS[sym];
-          const spread = ASSET_SPREADS[sym];
-
-          // Small random volatility factor based on asset category
-          let volatility = 0.0003; // Forex standard
-          if (asset.category === 'Metals') volatility = 0.0008;
-          if (asset.category === 'Crypto') volatility = 0.0025;
-
-          const changeFactor = 1 + (Math.random() - 0.5) * volatility;
-          let newPrice = prev.lastPrice * changeFactor;
-
-          // Stay within +/- 15% of the base price to keep it realistic
-          if (newPrice > asset.basePrice * 1.2) {
-            newPrice = asset.basePrice * 1.15;
-          } else if (newPrice < asset.basePrice * 0.8) {
-            newPrice = asset.basePrice * 0.85;
-          }
-
-          // Format to correct decimal digits
-          newPrice = parseFloat(newPrice.toFixed(asset.digits));
-
-          const bid = parseFloat((newPrice - spread / 2).toFixed(asset.digits));
-          const ask = parseFloat((newPrice + spread / 2).toFixed(asset.digits));
-          const changePercent = prev.changePercent + (Math.random() * 0.1 - 0.05);
-
-          nextPrices[sym] = {
-            bid,
-            ask,
-            lastPrice: newPrice,
-            changePercent: parseFloat(Math.min(Math.max(changePercent, -6), 6).toFixed(2)),
-          };
-        });
-        return nextPrices;
-      });
-    }, 1500);
-
-    return () => clearInterval(interval);
+    const unsubscribe = priceService.subscribe((freshPrices) => {
+      setPrices(freshPrices);
+    });
+    return unsubscribe;
   }, []);
 
   // Listen for user's trades and deposits from Firestore

@@ -30,7 +30,7 @@ export default function Trading() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [placing, setPlacing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<'All' | 'Metals' | 'Forex' | 'Crypto'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<'All' | 'Metals' | 'Forex' | 'Crypto' | 'Indices'>('All');
   const [isChartFullScreen, setIsChartFullScreen] = useState(false);
 
   const formatCurrency = (val: number | undefined) => {
@@ -136,11 +136,23 @@ export default function Trading() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 lg:gap-12 w-full lg:w-auto pt-4 lg:pt-0 border-t border-zinc-900 lg:border-t-0">
             <div>
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">BID PRICE</p>
-              <p className="text-lg font-bold font-mono text-zinc-300 mt-1">{activePrice.bid.toFixed(activeAsset.digits)}</p>
+              <p className={`text-lg font-bold font-mono mt-1 transition-colors duration-300 ${
+                activePrice.direction === 'up'
+                  ? 'text-emerald-400'
+                  : activePrice.direction === 'down'
+                    ? 'text-rose-400'
+                    : 'text-zinc-300'
+              }`}>{activePrice.bid.toFixed(activeAsset.digits)}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">ASK PRICE</p>
-              <p className="text-lg font-bold font-mono text-amber-400 mt-1">{activePrice.ask.toFixed(activeAsset.digits)}</p>
+              <p className={`text-lg font-bold font-mono mt-1 transition-colors duration-300 ${
+                activePrice.direction === 'up'
+                  ? 'text-emerald-400'
+                  : activePrice.direction === 'down'
+                    ? 'text-rose-400'
+                    : 'text-amber-400'
+              }`}>{activePrice.ask.toFixed(activeAsset.digits)}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">DAILY CHANGE</p>
@@ -163,12 +175,12 @@ export default function Trading() {
           <h2 className="text-sm font-bold text-white mb-3 uppercase tracking-wider text-zinc-400 px-2">Market Watch</h2>
           
           {/* Category Tabs */}
-          <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-900 mb-4 shrink-0">
-            {(['All', 'Metals', 'Forex', 'Crypto'] as const).map((cat) => (
+          <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-900 mb-4 shrink-0 overflow-x-auto">
+            {(['All', 'Metals', 'Forex', 'Crypto', 'Indices'] as const).map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all ${
+                className={`flex-1 text-[11px] font-bold py-1.5 px-2 rounded-lg transition-all min-w-max ${
                   selectedCategory === cat
                     ? 'bg-amber-500 text-zinc-950 shadow-[0_2px_5px_rgba(245,158,11,0.2)]'
                     : 'text-zinc-400 hover:text-white'
@@ -197,23 +209,49 @@ export default function Trading() {
                     setError('');
                     setSuccess('');
                   }}
-                  className={`w-full text-left p-3 rounded-xl border transition-all duration-150 flex justify-between items-center ${
+                  className={`w-full text-left p-3 rounded-xl border transition-all duration-300 flex justify-between items-center ${
                     isSelected
-                      ? 'bg-gradient-to-r from-amber-500/10 to-yellow-500/5 border-amber-500/40 text-white shadow-[inset_4px_0_10px_rgba(245,158,11,0.03)]'
-                      : 'bg-zinc-950/40 border-zinc-900 hover:border-zinc-800 text-zinc-400'
+                      ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/5 border-amber-500/40 text-white shadow-[inset_4px_0_10px_rgba(245,158,11,0.03)]'
+                      : price.direction === 'up'
+                        ? 'bg-emerald-500/5 border-emerald-500/20 text-zinc-300'
+                        : price.direction === 'down'
+                          ? 'bg-rose-500/5 border-rose-500/20 text-zinc-300'
+                          : 'bg-zinc-950/40 border-zinc-900 hover:border-zinc-800 text-zinc-400'
                   }`}
                 >
                   <div>
-                    <span className={`font-bold font-mono text-sm block ${isSelected ? 'text-amber-400' : 'text-zinc-200'}`}>
+                    <span className={`font-bold font-mono text-sm block transition-colors duration-300 ${
+                      isSelected 
+                        ? 'text-amber-400 font-extrabold' 
+                        : price.direction === 'up'
+                          ? 'text-emerald-400'
+                          : price.direction === 'down'
+                            ? 'text-rose-400'
+                            : 'text-zinc-200'
+                    }`}>
                       {sym}
                     </span>
                     <span className="text-[10px] text-zinc-500 font-medium">{asset.name.split('vs')[0]}</span>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono font-bold text-xs block text-zinc-300">
+                    <span className={`font-mono font-bold text-xs block transition-colors duration-300 ${
+                      price.direction === 'up'
+                        ? 'text-emerald-400'
+                        : price.direction === 'down'
+                          ? 'text-rose-400'
+                          : 'text-zinc-300'
+                    }`}>
                       {price.lastPrice.toFixed(asset.digits)}
                     </span>
-                    <span className={`font-mono text-[10px] block mt-0.5 ${price.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                    <span className={`font-mono text-[10px] block mt-0.5 transition-colors duration-300 ${
+                      price.direction === 'up'
+                        ? 'text-emerald-400'
+                        : price.direction === 'down'
+                          ? 'text-rose-400'
+                          : price.changePercent >= 0 
+                            ? 'text-emerald-400/80' 
+                            : 'text-rose-500/80'
+                    }`}>
                       {price.changePercent >= 0 ? '+' : ''}{price.changePercent.toFixed(2)}%
                     </span>
                   </div>
