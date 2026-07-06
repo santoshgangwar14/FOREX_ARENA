@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper to check if user is admin
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'santoshgangwar14@gmail.com' ||
+        request.auth.token.email == 'SantoshGangwar14@gmail.com' ||
+        request.auth.token.email == 'admin@forexarena.com' ||
+        request.auth.token.email == 'Admin@forexarena.com'
+      );
+    }
+
+    // User profiles rules
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // Wallets rules
+    match /wallets/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Trades rules
+    match /trades/{tradeId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Deposits rules
+    match /deposits/{depositId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Global settings rules
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
