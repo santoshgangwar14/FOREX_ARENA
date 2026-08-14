@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# FOREX ARENA
 
-# Run and deploy your AI Studio app
+A personal-use trading terminal designed to give users a realistic live-market trading experience across Forex, Metals, Crypto and Indices.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/db8b57fb-3237-497a-a672-b5aceabebe4b
+- Live market reference prices
+- TradingView chart integration
+- Buy / Sell execution interface
+- Lot-size, margin and free-margin calculations
+- Stop Loss / Take Profit
+- Floating P&L and trade history
+- Account dashboard and wallet
+- USDT deposit request and admin review flow
+- User authentication and email verification
+- Admin account management
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Configure the required Firebase environment/configuration.
 3. Run the app:
    `npm run dev`
+4. Build for production:
+   `npm run build`
+
+## Important
+
+FOREX ARENA is intended for personal use and live-market experience. Market data and order execution behavior should be treated according to the configured data and execution infrastructure.
