@@ -77,6 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateLocalWallet = (newWallet: Wallet) => setWallet(newWallet);
 
+  const createZeroWallet = (uid: string): Wallet => ({
+    uid,
+    balance: 0,
+    equity: 0,
+    margin: 0,
+    freeMargin: 0,
+    floatingPL: 0,
+    updatedAt: Date.now(),
+  });
+
   const fetchUserData = async (uid: string, email: string) => {
     try {
       const userRef = doc(db, 'users', uid);
@@ -122,15 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let userWallet: Wallet;
       if (!walletSnap.exists()) {
-        userWallet = {
-          uid,
-          balance: 10000,
-          equity: 10000,
-          margin: 0,
-          freeMargin: 10000,
-          floatingPL: 0,
-          updatedAt: Date.now(),
-        };
+        userWallet = createZeroWallet(uid);
         try {
           await setDoc(walletRef, userWallet);
         } catch (err) {
@@ -159,16 +161,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         handleFirestoreError(err, OperationType.CREATE, `users/${cred.user.uid}`);
       }
 
+      // New accounts always start with a zero wallet.
+      // Funds are added only through the controlled deposit/admin workflow.
       const walletRef = doc(db, 'wallets', cred.user.uid);
-      const userWallet: Wallet = {
-        uid: cred.user.uid,
-        balance: 10000,
-        equity: 10000,
-        margin: 0,
-        freeMargin: 10000,
-        floatingPL: 0,
-        updatedAt: Date.now(),
-      };
+      const userWallet = createZeroWallet(cred.user.uid);
 
       try {
         await setDoc(walletRef, userWallet);
