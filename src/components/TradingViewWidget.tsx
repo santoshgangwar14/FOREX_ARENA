@@ -1,108 +1,84 @@
-import React, { useEffect, useRef } from 'react';
-import { TradeSymbol } from '../types';
+import React, { useMemo } from 'react';
 
 interface TradingViewWidgetProps {
-  symbol: TradeSymbol;
+  symbol: string;
 }
 
 /**
- * Forex Arena market chart.
- * Chart data is supplied visually by TradingView; order execution remains
- * simulated inside TradingContext.
+ * Stable TradingView embed.
+ *
+ * We intentionally use a plain iframe instead of dynamically injecting
+ * tv.js. TradingView's script embed can race React's unmount/remount cycle
+ * (especially under Vite Fast Refresh / StrictMode) and produce:
+ * "Cannot read properties of null (reading 'parentNode')".
+ *
+ * The iframe is isolated from the React DOM lifecycle, so changing symbol
+ * or HMR cannot leave a TradingView script holding a stale DOM node.
  */
-export default function TradingViewWidget({ symbol }: TradingViewWidgetProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const getTradingViewSymbol = (sym: TradeSymbol) => {
-    switch (sym) {
-      case 'XAUUSD': return 'OANDA:XAUUSD';
-      case 'XAGUSD': return 'OANDA:XAGUSD';
-      case 'EURUSD': return 'OANDA:EURUSD';
-      case 'GBPUSD': return 'OANDA:GBPUSD';
-      case 'USDJPY': return 'OANDA:USDJPY';
-      case 'USDCHF': return 'OANDA:USDCHF';
-      case 'USDCAD': return 'OANDA:USDCAD';
-      case 'AUDUSD': return 'OANDA:AUDUSD';
-      case 'NZDUSD': return 'OANDA:NZDUSD';
-      case 'EURJPY': return 'OANDA:EURJPY';
-      case 'GBPJPY': return 'OANDA:GBPJPY';
-      case 'BTCUSD': return 'BINANCE:BTCUSDT';
-      case 'ETHUSD': return 'BINANCE:ETHUSDT';
-      case 'SOLUSD': return 'BINANCE:SOLUSDT';
-      case 'BNBUSD': return 'BINANCE:BNBUSDT';
-      case 'XRPUSD': return 'BINANCE:XRPUSDT';
-      default: return `FX_IDC:${sym}`;
-    }
-  };
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/tv.js';
-    script.type = 'text/javascript';
-    script.async = true;
-
-    const widgetContainerId = `tradingview_chart_${symbol}`;
-    container.id = widgetContainerId;
-
-    script.onload = () => {
-      if (!container.isConnected) return;
-      const TradingView = (window as any).TradingView;
-      if (!TradingView) return;
-
-      new TradingView.widget({
-        autosize: true,
-        symbol: getTradingViewSymbol(symbol),
-        // One-minute candles keep the current market session visibly live.
-        interval: '1',
-        timezone: 'Etc/UTC',
-        theme: 'dark',
-        style: '1',
-        locale: 'en',
-        enable_publishing: false,
-        allow_symbol_change: false,
-        hide_side_toolbar: false,
-        hide_top_toolbar: false,
-        save_image: false,
-        withdateranges: true,
-        details: true,
-        hotlist: false,
-        calendar: false,
-        studies: ['RSI@tv-basicstudies', 'MASimple@tv-basicstudies'],
-        container_id: widgetContainerId,
-        overrides: {
-          'paneProperties.background': '#050505',
-          'paneProperties.backgroundType': 'solid',
-          'scalesProperties.textColor': '#a1a1aa',
-        },
-      });
+export default function TradingViewWidget({
+  symbol,
+}: TradingViewWidgetProps) {
+  const tradingViewSymbol = useMemo(() => {
+    const map: Record<string, string> = {
+      XAUUSD: 'OANDA:XAUUSD',
+      XAGUSD: 'OANDA:XAGUSD',
+      EURUSD: 'OANDA:EURUSD',
+      GBPUSD: 'OANDA:GBPUSD',
+      USDJPY: 'OANDA:USDJPY',
+      USDCHF: 'OANDA:USDCHF',
+      USDCAD: 'OANDA:USDCAD',
+      AUDUSD: 'OANDA:AUDUSD',
+      NZDUSD: 'OANDA:NZDUSD',
+      EURJPY: 'OANDA:EURJPY',
+      GBPJPY: 'OANDA:GBPJPY',
+      BTCUSD: 'BITSTAMP:BTCUSD',
+      ETHUSD: 'BITSTAMP:ETHUSD',
+      SOLUSD: 'COINBASE:SOLUSD',
+      BNBUSD: 'BINANCE:BNBUSDT',
+      XRPUSD: 'BITSTAMP:XRPUSD',
+      NAS100: 'CAPITALCOM:US100',
+      US30: 'CAPITALCOM:US30',
+      SPX500: 'CAPITALCOM:US500',
     };
 
-    document.head.appendChild(script);
-
-    return () => {
-      container.innerHTML = '';
-      if (script.parentNode) script.parentNode.removeChild(script);
-    };
+    return (
+      map[symbol] ||
+      `OANDA:${symbol}`
+    );
   }, [symbol]);
 
+  const src = useMemo(() => {
+    const params = new URLSearchParams({
+      symbol: tradingViewSymbol,
+      interval: '5',
+      hidesidetoolbar: '0',
+      hidetoptoolbar: '0',
+      hidelegend: '0',
+      saveimage: '0',
+      toolbarbg: '0f1115',
+      theme: 'dark',
+      style: '1',
+      locale: 'en',
+      timezone: 'Asia/Kolkata',
+      withdateranges: '1',
+      hideideas: '1',
+      enable_publishing: '0',
+      allow_symbol_change: '0',
+    });
+
+    return `https://www.tradingview.com/widgetembed/?${params.toString()}`;
+  }, [tradingViewSymbol]);
+
   return (
-    <div className="w-full h-full bg-zinc-950 rounded-lg overflow-hidden border border-zinc-800 relative">
-      <div
-        ref={containerRef}
-        className="w-full h-full"
-        style={{ minHeight: '380px' }}
+    <div className="relative w-full h-full min-h-[420px] overflow-hidden rounded-xl bg-black">
+      <iframe
+        title={`TradingView ${symbol}`}
+        src={src}
+        className="absolute inset-0 w-full h-full border-0"
+        loading="eager"
+        allow="fullscreen"
+        referrerPolicy="origin"
       />
-      <div className="absolute top-2 right-2 z-10 pointer-events-none">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-zinc-950/85 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-400 backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Live Market Chart
-        </span>
-      </div>
     </div>
   );
 }
