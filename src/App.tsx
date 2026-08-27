@@ -37,7 +37,6 @@ import EconomicCalendar from './pages/EconomicCalendar';
 import TradingChartPopout from './pages/TradingChartPopout';
 import Admin from './pages/Admin';
 
-// Layout
 import SidebarLayout from './components/SidebarLayout';
 
 function LoadingScreen() {
@@ -60,6 +59,7 @@ function ProtectedRoute({
   } = useAuth();
 
   if (loading) return <LoadingScreen />;
+
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
@@ -84,6 +84,39 @@ function ProtectedRoute({
   );
 }
 
+function StandaloneProtectedRoute({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const {
+    currentUser,
+    emailVerifiedOverride,
+    loading,
+  } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const isVerified =
+    currentUser.emailVerified ||
+    emailVerifiedOverride;
+
+  if (!isVerified) {
+    return (
+      <Navigate
+        to="/email-verification"
+        replace
+      />
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function VerificationRoute({
   children,
 }: {
@@ -96,6 +129,7 @@ function VerificationRoute({
   } = useAuth();
 
   if (loading) return <LoadingScreen />;
+
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
@@ -105,7 +139,7 @@ function VerificationRoute({
     emailVerifiedOverride;
 
   if (isVerified) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -117,21 +151,40 @@ export default function App() {
       <AuthProvider>
         <TradingProvider>
           <Routes>
-            {/* Public */}
-            <Route path="/home" element={<Home />} />
-            <Route path="/contact" element={<Contact />} />
+            {/* =========================
+                PUBLIC ROUTES
+               ========================= */}
+
+            <Route
+              path="/"
+              element={<Home />}
+            />
+
+            <Route
+              path="/home"
+              element={<Home />}
+            />
+
+            <Route
+              path="/contact"
+              element={<Contact />}
+            />
+
             <Route
               path="/login"
               element={<Login />}
             />
+
             <Route
               path="/register"
               element={<Register />}
             />
+
             <Route
               path="/forgot-password"
               element={<ForgotPassword />}
             />
+
             <Route
               path="/email-verification"
               element={
@@ -141,9 +194,12 @@ export default function App() {
               }
             />
 
-            {/* Protected */}
+            {/* =========================
+                PROTECTED ROUTES
+               ========================= */}
+
             <Route
-              path="/"
+              path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Dashboard />
@@ -157,6 +213,16 @@ export default function App() {
                 <ProtectedRoute>
                   <Trading />
                 </ProtectedRoute>
+              }
+            />
+
+            {/* Standalone chart popout without SidebarLayout */}
+            <Route
+              path="/trade/chart"
+              element={
+                <StandaloneProtectedRoute>
+                  <TradingChartPopout />
+                </StandaloneProtectedRoute>
               }
             />
 
@@ -206,15 +272,6 @@ export default function App() {
             />
 
             <Route
-              path="/trade/chart"
-              element={
-                <ProtectedRoute>
-                  <TradingChartPopout />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
               path="/calendar"
               element={
                 <ProtectedRoute>
@@ -241,14 +298,10 @@ export default function App() {
               }
             />
 
+            {/* Unknown URLs go to the public homepage */}
             <Route
               path="*"
-              element={
-                <Navigate
-                  to="/home"
-                  replace
-                />
-              }
+              element={<Navigate to="/" replace />}
             />
           </Routes>
         </TradingProvider>
