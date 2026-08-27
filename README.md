@@ -1,6 +1,6 @@
-# FOREX ARENA
+# GOLDX ARENA
 
-A personal-use trading terminal designed to give users a realistic live-market trading experience across Forex, Metals, Crypto and Indices.
+A personal-use trading terminal designed to give users a realistic live-market trading experience across GOLDX, Metals, Crypto and Indices.
 
 ## Features
 
@@ -29,4 +29,4 @@ A personal-use trading terminal designed to give users a realistic live-market t
 
 ## Important
 
-FOREX ARENA is intended for personal use and live-market experience. Market data and order execution behavior should be treated according to the configured data and execution infrastructure.
+GOLDX ARENA is intended for personal use and live-market experience. Market data and order execution behavior should be treated according to the configured data and execution infrastructure.

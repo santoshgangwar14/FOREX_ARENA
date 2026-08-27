@@ -57,7 +57,7 @@ export default function EmailVerification() {
 
   const handleBypass = () => {
     bypassVerification();
-    setMessage('Evaluation mode enabled. Welcome to ForexArena!');
+    setMessage('Evaluation mode enabled. Welcome to GoldxArena!');
     setTimeout(() => navigate('/'), 1000);
   };
 
@@ -121,13 +121,13 @@ export default function EmailVerification() {
           </button>
         </div>
 
-        {/* PROMINENT GRADING / EVALUATOR BYPASS PANEL */}
+        {/* PROMINENT GRADING /  BYPASS PANEL */}
         <div className="mt-8 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
           <div className="flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                Evaluator Instant Bypass
+                 Instant Bypass
               </p>
               <p className="text-xs text-zinc-400 mt-1">
                 Skip verification to instantly test the platform with any fake or real testing email!

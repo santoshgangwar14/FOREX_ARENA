@@ -12,26 +12,59 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UserProfile, Wallet } from '../types';
 
-export function getFirebaseUserMessage(error: unknown, fallback = 'Something went wrong. Please try again.') {
-  const code = typeof error === 'object' && error !== null && 'code' in error
-    ? String((error as { code?: unknown }).code || '')
-    : '';
+export function getFirebaseUserMessage(
+  error: unknown,
+  fallback = 'Something went wrong. Please try again.'
+) {
+  const code =
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
 
   const messages: Record<string, string> = {
-    'auth/email-already-in-use': 'This email is already registered. Please sign in or use another email.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/weak-password': 'Your password is too weak. Please choose a stronger password.',
-    'auth/user-not-found': 'No account was found with this email address.',
-    'auth/wrong-password': 'The email or password is incorrect. Please try again.',
-    'auth/invalid-credential': 'The email or password is incorrect. Please try again.',
-    'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
-    'auth/network-request-failed': 'We could not connect to the service. Please check your internet connection and try again.',
-    'auth/user-disabled': 'This account is currently unavailable. Please contact support.',
-    'auth/requires-recent-login': 'Please sign in again and retry this action.',
-    'auth/operation-not-allowed': 'This action is currently unavailable. Please try again later.',
-    'auth/missing-password': 'Please enter your password.',
-    'auth/invalid-verification-code': 'The verification code is invalid or expired. Please request a new one.',
-    'auth/invalid-action-code': 'This link is invalid or has expired. Please request a new one.',
+    'auth/email-already-in-use':
+      'This email is already registered. Please sign in or use another email.',
+
+    'auth/invalid-email':
+      'Please enter a valid email address.',
+
+    'auth/weak-password':
+      'Your password is too weak. Please choose a stronger password.',
+
+    'auth/user-not-found':
+      'No account was found with this email address.',
+
+    'auth/wrong-password':
+      'The email or password is incorrect. Please try again.',
+
+    'auth/invalid-credential':
+      'The email or password is incorrect. Please try again.',
+
+    'auth/too-many-requests':
+      'Too many attempts. Please wait a moment and try again.',
+
+    'auth/network-request-failed':
+      'We could not connect to the service. Please check your internet connection and try again.',
+
+    'auth/user-disabled':
+      'This account is currently unavailable. Please contact support.',
+
+    'auth/requires-recent-login':
+      'Please sign in again and retry this action.',
+
+    'auth/operation-not-allowed':
+      'This action is currently unavailable. Please try again later.',
+
+    'auth/missing-password':
+      'Please enter your password.',
+
+    'auth/invalid-verification-code':
+      'The verification code is invalid or expired. Please request a new one.',
+
+    'auth/invalid-action-code':
+      'This link is invalid or has expired. Please request a new one.',
   };
 
   return messages[code] || fallback;
@@ -43,7 +76,11 @@ interface AuthContextType {
   wallet: Wallet | null;
   loading: boolean;
   emailVerifiedOverride: boolean;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string
+  ) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -57,201 +94,445 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+
   return context;
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [emailVerifiedOverride, setEmailVerifiedOverride] = useState(() =>
-    localStorage.getItem('forexarena_email_verified_bypass') === 'true'
-  );
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [currentUser, setCurrentUser] =
+    useState<FirebaseUser | null>(null);
 
+  const [userProfile, setUserProfile] =
+    useState<UserProfile | null>(null);
+
+  const [wallet, setWallet] =
+    useState<Wallet | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [emailVerifiedOverride, setEmailVerifiedOverride] =
+    useState(() => {
+      return (
+        localStorage.getItem(
+          'forexarena_email_verified_bypass'
+        ) === 'true'
+      );
+    });
+
+  /*
+   * Admin / evaluation verification bypass.
+   *
+   * This is stored only in the browser's localStorage.
+   * It does not modify Firebase Authentication verification status.
+   */
   const bypassVerification = () => {
-    localStorage.setItem('forexarena_email_verified_bypass', 'true');
+    localStorage.setItem(
+      'forexarena_email_verified_bypass',
+      'true'
+    );
+
     setEmailVerifiedOverride(true);
   };
 
-  const updateLocalWallet = (newWallet: Wallet) => setWallet(newWallet);
+  const updateLocalWallet = (newWallet: Wallet) => {
+    setWallet(newWallet);
+  };
 
-  const createZeroWallet = (uid: string): Wallet => ({
+  /*
+   * Create a default $10,000 trading wallet.
+   */
+  const createDefaultWallet = (uid: string): Wallet => ({
     uid,
-    balance: 0,
-    equity: 0,
+    balance: 10000,
+    equity: 10000,
     margin: 0,
-    freeMargin: 0,
+    freeMargin: 10000,
     floatingPL: 0,
     updatedAt: Date.now(),
   });
 
-  const fetchUserData = async (uid: string, email: string) => {
+  /*
+   * Fetch user profile and wallet from Firestore.
+   */
+  const fetchUserData = async (
+    uid: string,
+    email: string
+  ) => {
     try {
+      /*
+       * -------------------------------------------------------
+       * 1. USER PROFILE
+       * -------------------------------------------------------
+       */
+
       const userRef = doc(db, 'users', uid);
+
       let userSnap;
+
       try {
         userSnap = await getDoc(userRef);
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, `users/${uid}`);
+        handleFirestoreError(
+          err,
+          OperationType.GET,
+          `users/${uid}`
+        );
         return;
       }
 
       let profile: UserProfile;
-      const isAdmin = email.toLowerCase() === 'santoshgangwar14@gmail.com' || email.toLowerCase() === 'admin@forexarena.com';
+
+      const normalizedEmail = email.toLowerCase();
+
+      const isAdmin =
+        normalizedEmail === 'santoshgangwar14@gmail.com' ||
+        normalizedEmail === 'admin@forexarena.com' ||
+        normalizedEmail === 'admin@goldxarena.com';
 
       if (!userSnap.exists()) {
-        profile = { uid, email, createdAt: Date.now(), isAdmin };
+        profile = {
+          uid,
+          email,
+          createdAt: Date.now(),
+          isAdmin,
+        };
+
         try {
           await setDoc(userRef, profile);
         } catch (err) {
-          handleFirestoreError(err, OperationType.CREATE, `users/${uid}`);
+          handleFirestoreError(
+            err,
+            OperationType.CREATE,
+            `users/${uid}`
+          );
         }
       } else {
         profile = userSnap.data() as UserProfile;
+
+        /*
+         * Keep admin status synchronized for configured admin emails.
+         */
         if (isAdmin && !profile.isAdmin) {
           profile.isAdmin = true;
+
           try {
-            await setDoc(userRef, { isAdmin: true }, { merge: true });
+            await setDoc(
+              userRef,
+              { isAdmin: true },
+              { merge: true }
+            );
           } catch (err) {
-            handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+            handleFirestoreError(
+              err,
+              OperationType.UPDATE,
+              `users/${uid}`
+            );
           }
         }
       }
+
       setUserProfile(profile);
 
+      /*
+       * -------------------------------------------------------
+       * 2. TRADING WALLET
+       * -------------------------------------------------------
+       */
+
       const walletRef = doc(db, 'wallets', uid);
+
       let walletSnap;
+
       try {
         walletSnap = await getDoc(walletRef);
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, `wallets/${uid}`);
+        handleFirestoreError(
+          err,
+          OperationType.GET,
+          `wallets/${uid}`
+        );
         return;
       }
 
       let userWallet: Wallet;
+
       if (!walletSnap.exists()) {
-        userWallet = createZeroWallet(uid);
+        /*
+         * New trading accounts start with $10,000.
+         */
+        userWallet = createDefaultWallet(uid);
+
         try {
           await setDoc(walletRef, userWallet);
         } catch (err) {
-          handleFirestoreError(err, OperationType.CREATE, `wallets/${uid}`);
+          handleFirestoreError(
+            err,
+            OperationType.CREATE,
+            `wallets/${uid}`
+          );
         }
       } else {
         userWallet = walletSnap.data() as Wallet;
       }
+
       setWallet(userWallet);
     } catch (err) {
-      console.error('Error loading account data:', err);
+      console.error(
+        'Error fetching user data/wallet from Firestore:',
+        err
+      );
     }
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  /*
+   * ---------------------------------------------------------
+   * SIGN UP
+   * ---------------------------------------------------------
+   */
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName: string
+  ) => {
     setLoading(true);
+
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const userRef = doc(db, 'users', cred.user.uid);
-      const isAdmin = email.toLowerCase() === 'santoshgangwar14@gmail.com' || email.toLowerCase() === 'admin@forexarena.com';
-      const profile: UserProfile = { uid: cred.user.uid, email, displayName, createdAt: Date.now(), isAdmin };
+      const cleanEmail = email.trim();
+      const cleanDisplayName = displayName.trim();
+
+      const cred =
+        await createUserWithEmailAndPassword(
+          auth,
+          cleanEmail,
+          password
+        );
+
+      /*
+       * Create user profile.
+       */
+      const userRef = doc(
+        db,
+        'users',
+        cred.user.uid
+      );
+
+      const normalizedEmail =
+        cleanEmail.toLowerCase();
+
+      const isAdmin =
+        normalizedEmail ===
+          'santoshgangwar14@gmail.com' ||
+        normalizedEmail ===
+          'admin@forexarena.com' ||
+        normalizedEmail ===
+          'admin@goldxarena.com';
+
+      const profile: UserProfile = {
+        uid: cred.user.uid,
+        email: cleanEmail,
+        displayName: cleanDisplayName,
+        createdAt: Date.now(),
+        isAdmin,
+      };
 
       try {
         await setDoc(userRef, profile);
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `users/${cred.user.uid}`);
+        handleFirestoreError(
+          err,
+          OperationType.CREATE,
+          `users/${cred.user.uid}`
+        );
       }
 
-      // New accounts always start with a zero wallet.
-      // Funds are added only through the controlled deposit/admin workflow.
-      const walletRef = doc(db, 'wallets', cred.user.uid);
-      const userWallet = createZeroWallet(cred.user.uid);
+      /*
+       * Create default $10,000 trading wallet.
+       */
+      const walletRef = doc(
+        db,
+        'wallets',
+        cred.user.uid
+      );
+
+      const userWallet =
+        createDefaultWallet(cred.user.uid);
 
       try {
         await setDoc(walletRef, userWallet);
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `wallets/${cred.user.uid}`);
+        handleFirestoreError(
+          err,
+          OperationType.CREATE,
+          `wallets/${cred.user.uid}`
+        );
       }
 
       setUserProfile(profile);
       setWallet(userWallet);
-      await firebaseSendEmailVerification(cred.user);
+
+      /*
+       * Send Firebase verification email.
+       */
+      await firebaseSendEmailVerification(
+        cred.user
+      );
     } catch (error) {
       setLoading(false);
       throw error;
     }
   };
 
-  const logIn = async (email: string, password: string) => {
+  /*
+   * ---------------------------------------------------------
+   * LOGIN
+   * ---------------------------------------------------------
+   */
+  const logIn = async (
+    email: string,
+    password: string
+  ) => {
     setLoading(true);
+
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      await fetchUserData(cred.user.uid, email);
+      const cred =
+        await signInWithEmailAndPassword(
+          auth,
+          email.trim(),
+          password
+        );
+
+      await fetchUserData(
+        cred.user.uid,
+        cred.user.email || email.trim()
+      );
     } catch (error) {
       setLoading(false);
       throw error;
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * SEND EMAIL VERIFICATION
+   * ---------------------------------------------------------
+   */
   const sendEmailVerification = async () => {
-    if (auth.currentUser) await firebaseSendEmailVerification(auth.currentUser);
+    if (auth.currentUser) {
+      await firebaseSendEmailVerification(
+        auth.currentUser
+      );
+    }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * PASSWORD RESET
+   * ---------------------------------------------------------
+   */
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordResetEmail(
+      auth,
+      email.trim()
+    );
   };
 
+  /*
+   * ---------------------------------------------------------
+   * LOGOUT
+   * ---------------------------------------------------------
+   */
   const logOut = async () => {
     setLoading(true);
+
     try {
       await signOut(auth);
+
       setUserProfile(null);
       setWallet(null);
       setCurrentUser(null);
     } catch (err) {
-      console.error('Logout error:', err);
+      console.error('Log out error:', err);
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * REFRESH USER STATUS
+   * ---------------------------------------------------------
+   */
   const refreshUserStatus = async () => {
     if (auth.currentUser) {
       await auth.currentUser.reload();
-      setCurrentUser({ ...auth.currentUser });
-      await fetchUserData(auth.currentUser.uid, auth.currentUser.email || '');
+
+      setCurrentUser({
+        ...auth.currentUser,
+      });
+
+      await fetchUserData(
+        auth.currentUser.uid,
+        auth.currentUser.email || ''
+      );
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * AUTH STATE LISTENER
+   * ---------------------------------------------------------
+   */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (user) await fetchUserData(user.uid, user.email || '');
-      else {
-        setUserProfile(null);
-        setWallet(null);
-      }
-      setLoading(false);
-    });
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          setCurrentUser(user);
+
+          if (user) {
+            await fetchUserData(
+              user.uid,
+              user.email || ''
+            );
+          } else {
+            setUserProfile(null);
+            setWallet(null);
+          }
+
+          setLoading(false);
+        }
+      );
+
     return unsubscribe;
   }, []);
 
+  const value: AuthContextType = {
+    currentUser,
+    userProfile,
+    wallet,
+    loading,
+    emailVerifiedOverride,
+    signUp,
+    logIn,
+    logOut,
+    resetPassword,
+    sendEmailVerification,
+    refreshUserStatus,
+    bypassVerification,
+    updateLocalWallet,
+  };
+
   return (
-    <AuthContext.Provider value={{
-      currentUser,
-      userProfile,
-      wallet,
-      loading,
-      emailVerifiedOverride,
-      signUp,
-      logIn,
-      logOut,
-      resetPassword,
-      sendEmailVerification,
-      refreshUserStatus,
-      bypassVerification,
-      updateLocalWallet,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

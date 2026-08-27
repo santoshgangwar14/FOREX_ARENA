@@ -1,6 +1,6 @@
 {
-  "name": "ForexArena",
-  "description": "Premium forex and crypto demo trading arena inspired by FTMO and The5ers, featuring live-simulated charts, trading engine, and deposit validation.",
+  "name": "GoldxArena",
+  "description": "Premium goldx and crypto  trading arena inspired by FTMO and The5ers, featuring live-simulated charts, trading engine, and deposit validation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

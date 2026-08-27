@@ -38,7 +38,7 @@ export const APP_MARKET_ASSETS: Record<TradeSymbol, Omit<MarketAsset, 'basePrice
   SPX500: { symbol: 'SPX500', name: 'S&P 500 Index', category: 'Indices', contractSize: 100, pipSize: 0.1, digits: 2 },
 };
 
-// Professional Prop Firm spreads (in absolute terms)
+// Professional spreads (in absolute terms)
 export const APP_ASSET_SPREADS: Record<TradeSymbol, number> = {
   XAUUSD: 0.28,    // tight Gold spread
   XAGUSD: 0.015,   // tight Silver spread
@@ -84,6 +84,53 @@ export const BASELINE_PRICES: Record<TradeSymbol, number> = {
   SPX500: 5450.00,
 };
 
+const TWELVE_DATA_STREAM_MAP: Record<string, TradeSymbol> = {
+  'XAU/USD': 'XAUUSD',
+  'XAG/USD': 'XAGUSD',
+  'EUR/USD': 'EURUSD',
+  'GBP/USD': 'GBPUSD',
+  'USD/JPY': 'USDJPY',
+  'USD/CHF': 'USDCHF',
+  'USD/CAD': 'USDCAD',
+  'AUD/USD': 'AUDUSD',
+  'NZD/USD': 'NZDUSD',
+  'EUR/JPY': 'EURJPY',
+  'GBP/JPY': 'GBPJPY',
+  'NDX': 'NAS100',
+  'DJI': 'US30',
+  'GSPC': 'SPX500',
+};
+
+type TwelveDataSubscriber =
+  (message: Record<string, unknown>) => void;
+
+interface TwelveDataBridge {
+  ws: WebSocket | null;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
+  subscribers: Set<TwelveDataSubscriber>;
+  connecting: boolean;
+}
+
+const GOLDX_TWELVE_DATA_BRIDGE_KEY =
+  '__GOLDX_TWELVE_DATA_BRIDGE__';
+
+function getTwelveDataBridge(): TwelveDataBridge {
+  const root = globalThis as typeof globalThis & {
+    __GOLDX_TWELVE_DATA_BRIDGE__?: TwelveDataBridge;
+  };
+
+  if (!root[GOLDX_TWELVE_DATA_BRIDGE_KEY]) {
+    root[GOLDX_TWELVE_DATA_BRIDGE_KEY] = {
+      ws: null,
+      reconnectTimer: null,
+      subscribers: new Set<TwelveDataSubscriber>(),
+      connecting: false,
+    };
+  }
+
+  return root[GOLDX_TWELVE_DATA_BRIDGE_KEY]!;
+}
+
 type PriceListener = (prices: Record<TradeSymbol, PriceData>) => void;
 
 class PriceService {
@@ -93,8 +140,7 @@ class PriceService {
   private fastPollIntervalId: NodeJS.Timeout | null = null;
   private slowPollIntervalId: NodeJS.Timeout | null = null;
   private microTickIntervalId: NodeJS.Timeout | null = null;
-
-  constructor() {
+constructor() {
     this.prices = {} as Record<TradeSymbol, PriceData>;
     // Initialize cache with baseline prices
     (Object.keys(BASELINE_PRICES) as TradeSymbol[]).forEach((sym) => {
@@ -160,84 +206,372 @@ class PriceService {
     if (this.isRunning) return;
     this.isRunning = true;
 
-    // Trigger initial polls
+    // Crypto + index REST quotes run periodically.
+    // XAUUSD is streamed through Twelve Data WebSocket.
     this.pollFastAssets();
     this.pollSlowAssets();
 
-    // Fast Polling: Crypto and Indices (every 4 seconds)
     this.fastPollIntervalId = setInterval(() => {
       this.pollFastAssets();
-    }, 4000);
+    }, 10000);
 
-    // Slow Polling: Forex and Metals (every 12 seconds)
     this.slowPollIntervalId = setInterval(() => {
       this.pollSlowAssets();
     }, 12000);
 
-    // High frequency micro tick updates for active and dynamic UI feel
+    // Fetch the actual previous trading-session close once, then refresh
+    // periodically. The WebSocket continues to provide the live ticks.
+    this.dailyChangeRefreshTimer = setInterval(() => {
+    }, 60 * 1000);
+    
+
+    // Real-time XAU/USD stream. No artificial Gold movement.
+    this.startTwelveDataGoldStream();
+    // Recalculate daily change from the saved previous close every second.
+    this.dailyChangeRefreshTimer = setInterval(() => {
+    }, 1000);
+
+    // Check for the once-per-day rollover capture.
+    this.dailyCloseCaptureTimer = setInterval(() => {
+      const now = new Date();
+      if (
+        now.getUTCHours() === 23 &&
+        now.getUTCMinutes() === 59 &&
+        now.getUTCSeconds() >= 55
+      ) {
+        this.captureDailyCloseIfNeeded();
+      }
+    }, 1000);
+
+    // Keep UI micro-ticks for non-metal assets only.
     this.startMicroTicks();
   }
 
   public stop() {
     this.isRunning = false;
-    if (this.fastPollIntervalId) clearInterval(this.fastPollIntervalId);
-    if (this.slowPollIntervalId) clearInterval(this.slowPollIntervalId);
-    if (this.microTickIntervalId) clearInterval(this.microTickIntervalId);
+
+    if (this.fastPollIntervalId) {
+      clearInterval(
+        this.fastPollIntervalId
+      );
+      this.fastPollIntervalId = null;
+    }
+
+    if (this.slowPollIntervalId) {
+      clearInterval(
+        this.slowPollIntervalId
+      );
+      this.slowPollIntervalId = null;
+    }
+
+    if (this.microTickIntervalId) {
+      clearInterval(
+        this.microTickIntervalId
+      );
+      this.microTickIntervalId = null;
+    }
+  }
+
+  /**
+   * Automatically capture the last live price at UTC 23:59:59 once per day.
+   * without requiring manual input.
+   */
+
+  /**
+   * Daily rollover is based on the live price already received by the
+   * GoldX WebSocket. No external quote API is used for the close.
+   *
+   * The browser checks continuously and captures the last valid platform
+   * price once the configured UTC rollover window is reached.
+   */
+  private getRolloverDate(): string {
+    return new Date()
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  /**
+   * Recalculate Daily Change from the saved platform close.
+   */
+
+  /**
+   * Twelve Data real-time XAU/USD stream.
+   *
+   * The API key is read from Vite's environment at build/runtime:
+   * VITE_TWELVE_DATA_API_KEY
+   *
+   * We deliberately do not generate synthetic Gold ticks. If the stream
+   * disconnects, the last real price remains in cache until a real tick
+   * arrives again.
+   */
+  private handleTwelveDataMessage(
+    message: Record<string, unknown>
+  ) {
+    const symbol =
+      String(message?.symbol || '')
+        .toUpperCase();
+
+    const price = Number(
+      message?.price ??
+      message?.close ??
+      message?.last_price
+    );
+
+    if (
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      return;
+    }
+
+    const bidValue = Number(message?.bid);
+    const askValue = Number(message?.ask);
+
+    const normalizedSymbol =
+      symbol.includes('/')
+        ? symbol
+        : Object.keys(
+            TWELVE_DATA_STREAM_MAP
+          ).find(
+            (key) =>
+              key.replace('/', '') ===
+              symbol
+          );
+
+    const mappedSymbol =
+      normalizedSymbol
+        ? TWELVE_DATA_STREAM_MAP[
+            normalizedSymbol
+          ]
+        : undefined;
+
+    if (!mappedSymbol) {
+      return;
+    }
+
+    this.updateLiveTick(
+      mappedSymbol,
+      price,
+      Number.isFinite(bidValue)
+        ? bidValue
+        : undefined,
+      Number.isFinite(askValue)
+        ? askValue
+        : undefined
+    );
+  }
+
+  private startTwelveDataGoldStream() {
+    const bridge =
+      getTwelveDataBridge();
+
+    const subscriber: TwelveDataSubscriber =
+      (message) =>
+        this.handleTwelveDataMessage(
+          message
+        );
+
+    bridge.subscribers.add(
+      subscriber
+    );
+
+    const apiKey =
+      import.meta.env.VITE_TWELVE_DATA_API_KEY;
+
+    if (!apiKey) {
+      console.error(
+        'Twelve Data API key is missing. Add VITE_TWELVE_DATA_API_KEY to .env.local.'
+      );
+      return;
+    }
+
+    if (
+      bridge.ws &&
+      (
+        bridge.ws.readyState ===
+          WebSocket.OPEN ||
+        bridge.ws.readyState ===
+          WebSocket.CONNECTING
+      )
+    ) {
+      return;
+    }
+
+    if (bridge.connecting) {
+      return;
+    }
+
+    bridge.connecting = true;
+
+    const wsUrl =
+      `wss://ws.twelvedata.com/v1/quotes/price?apikey=${encodeURIComponent(apiKey)}`;
+
+    try {
+      const ws =
+        new WebSocket(wsUrl);
+
+      bridge.ws = ws;
+
+      ws.onopen = () => {
+        bridge.connecting = false;
+
+        ws.send(
+          JSON.stringify({
+            action: 'subscribe',
+            params: {
+              symbols:
+                Object.keys(
+                  TWELVE_DATA_STREAM_MAP
+                ).join(','),
+            },
+          })
+        );
+
+        console.info(
+          'Twelve Data WebSocket connected: XAU/USD + FX + indices'
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message =
+            JSON.parse(event.data);
+
+          bridge.subscribers.forEach(
+            (subscriber) => {
+              try {
+                subscriber(
+                  message
+                );
+              } catch (
+                subscriberError
+              ) {
+                console.warn(
+                  'Twelve Data subscriber error:',
+                  subscriberError
+                );
+              }
+            }
+          );
+        } catch (error) {
+          console.warn(
+            'Invalid Twelve Data WebSocket message:',
+            error
+          );
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.warn(
+          'Twelve Data WebSocket error:',
+          error
+        );
+      };
+
+      ws.onclose = () => {
+        bridge.connecting = false;
+
+        if (bridge.ws === ws) {
+          bridge.ws = null;
+        }
+
+        if (
+          bridge.subscribers.size ===
+            0 ||
+          bridge.reconnectTimer
+        ) {
+          return;
+        }
+
+        bridge.reconnectTimer =
+          setTimeout(() => {
+            bridge.reconnectTimer =
+              null;
+
+            const latest =
+              getTwelveDataBridge();
+
+            if (
+              latest.ws &&
+              (
+                latest.ws.readyState ===
+                  WebSocket.OPEN ||
+                latest.ws.readyState ===
+                  WebSocket.CONNECTING
+              )
+            ) {
+              return;
+            }
+
+            const serviceInstance =
+              this;
+
+            serviceInstance.startTwelveDataGoldStream();
+          }, 3000);
+      };
+    } catch (error) {
+      bridge.connecting = false;
+      console.error(
+        'Unable to create Twelve Data WebSocket:',
+        error
+      );
+    }
+  }
+
+  private updateLiveTick(
+    sym: TradeSymbol,
+    realPrice: number,
+    liveBid?: number,
+    liveAsk?: number
+  ) {
+    const prev = this.prices[sym];
+    const asset = APP_MARKET_ASSETS[sym];
+    const fallbackSpread = APP_ASSET_SPREADS[sym];
+    const digits = asset.digits;
+
+    const bid = Number.isFinite(liveBid)
+      ? liveBid!
+      : realPrice - fallbackSpread / 2;
+
+    const ask = Number.isFinite(liveAsk)
+      ? liveAsk!
+      : realPrice + fallbackSpread / 2;
+
+    const direction =
+      realPrice > prev.lastPrice
+        ? 'up'
+        : realPrice < prev.lastPrice
+          ? 'down'
+          : 'neutral';
+
+    const high = Math.max(prev.high, realPrice);
+    const low = Math.min(prev.low, realPrice);
+    const changePercent = prev.changePercent;
+
+this.prices[sym] = {
+      ...prev,
+      bid: parseFloat(bid.toFixed(digits)),
+      ask: parseFloat(ask.toFixed(digits)),
+      lastPrice: parseFloat(realPrice.toFixed(digits)),
+      changePercent: parseFloat(
+        Math.min(Math.max(changePercent, -100), 100).toFixed(2)
+      ),
+      direction,
+      high: parseFloat(high.toFixed(digits)),
+      low: parseFloat(low.toFixed(digits)),
+      lastUpdate: Date.now(),
+    };
+
+    this.notifyListeners();
   }
 
   private startMicroTicks() {
-    if (this.microTickIntervalId) clearInterval(this.microTickIntervalId);
-    
-    this.microTickIntervalId = setInterval(() => {
-      let hasChanges = false;
-      const freshPrices = { ...this.prices };
-
-      (Object.keys(freshPrices) as TradeSymbol[]).forEach((sym) => {
-        if (sym === 'XAUUSD' || sym === 'XAGUSD') {
-          return; // Skip artificial jitter / baseline constraint for live metals
-        }
-        const prev = freshPrices[sym];
-        const spread = APP_ASSET_SPREADS[sym];
-        const digits = APP_MARKET_ASSETS[sym].digits;
-
-        // Apply a subtle, ultra-realistic jitter based on spread (scaled to 15%)
-        // Ensures the prices move live on the UI every 500ms
-        const jitter = (Math.random() - 0.5) * spread * 0.15;
-        let newPrice = prev.lastPrice + jitter;
-
-        // Constrain it close to the baseline to prevent runaways if API is offline
-        const base = BASELINE_PRICES[sym];
-        const maxDev = base * 0.12;
-        if (newPrice > base + maxDev) {
-          newPrice = base + maxDev;
-        } else if (newPrice < base - maxDev) {
-          newPrice = base - maxDev;
-        }
-
-        newPrice = parseFloat(newPrice.toFixed(digits));
-
-        if (newPrice !== prev.lastPrice) {
-          hasChanges = true;
-          const bid = parseFloat((newPrice - spread / 2).toFixed(digits));
-          const ask = parseFloat((newPrice + spread / 2).toFixed(digits));
-          const direction = newPrice > prev.lastPrice ? 'up' : 'down';
-
-          freshPrices[sym] = {
-            ...prev,
-            bid,
-            ask,
-            lastPrice: newPrice,
-            direction,
-            lastUpdate: Date.now(),
-          };
-        }
-      });
-
-      if (hasChanges) {
-        this.prices = freshPrices;
-        this.notifyListeners();
-      }
-    }, 500);
+    // Deliberately disabled.
+    // Market prices must only change from an actual market-data source.
+    if (this.microTickIntervalId) {
+      clearInterval(this.microTickIntervalId);
+      this.microTickIntervalId = null;
+    }
   }
 
   // Fast Assets: Cryptos and Indices
@@ -292,156 +626,20 @@ class PriceService {
       );
     }
 
-    // 2. Fetch Spot Metals (XAUUSD, XAGUSD) from Gold-API.com (Free, Centralized, CORS-enabled, Live Source)
-    try {
-      const [xauRes, xagRes] = await Promise.all([
-        this.fetchWithRetry('https://api.gold-api.com/price/XAU'),
-        this.fetchWithRetry('https://api.gold-api.com/price/XAG')
-      ]);
-      const xauJson = await xauRes.json();
-      const xagJson = await xagRes.json();
-      
-      const xauPrice = parseFloat(xauJson?.price);
-      const xagPrice = parseFloat(xagJson?.price);
-      
-      if (!isNaN(xauPrice)) {
-        updatedPrices['XAUUSD'] = xauPrice;
-        const prevClose = BASELINE_PRICES['XAUUSD'];
-        updatedChanges['XAUUSD'] = ((xauPrice - prevClose) / prevClose) * 100;
-      }
-      if (!isNaN(xagPrice)) {
-        updatedPrices['XAGUSD'] = xagPrice;
-        const prevClose = BASELINE_PRICES['XAGUSD'];
-        updatedChanges['XAGUSD'] = ((xagPrice - prevClose) / prevClose) * 100;
-      }
-    } catch (metalsErr) {
-      console.error('Gold-API metals fetch failed:', metalsErr);
-    }
+    // 2. XAUUSD is supplied by the Twelve Data WebSocket.
+    // Do NOT poll Gold-API here; REST polling caused stale 30-50s Gold prices.
 
-    // 3. Fetch Indices (SPX500, US30, NAS100) from Yahoo Finance Spark API
-    try {
-      const symbols = '%5EGSPC,%5EDJI,%5ENDX';
-      const url = `https://api.allorigins.win/get?url=${encodeURIComponent(
-        `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols}`
-      )}`;
-      const response = await this.fetchWithRetry(url);
-      const data = await response.json();
-      if (data?.contents) {
-        const parsed = JSON.parse(data.contents);
-        const result = parsed?.spark?.result;
-        if (Array.isArray(result)) {
-          const indexMappings: Record<string, TradeSymbol> = {
-            '^GSPC': 'SPX500',
-            '^DJI': 'US30',
-            '^NDX': 'NAS100',
-          };
-
-          result.forEach((item: any) => {
-            const sym = indexMappings[item.symbol];
-            if (sym) {
-              const meta = item.response?.[0]?.meta;
-              if (meta) {
-                const price = parseFloat(meta.regularMarketPrice);
-                const prevClose = parseFloat(meta.chartPreviousClose);
-                if (!isNaN(price)) {
-                  updatedPrices[sym] = price;
-                  if (!isNaN(prevClose) && prevClose > 0) {
-                    updatedChanges[sym] = ((price - prevClose) / prevClose) * 100;
-                  }
-                }
-              }
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('Yahoo Finance Spark query failed, trying individual chart endpoints:', err);
-      const tickers = [
-        { sym: 'SPX500' as TradeSymbol, yahooSym: '%5EGSPC' },
-        { sym: 'US30' as TradeSymbol, yahooSym: '%5EDJI' },
-        { sym: 'NAS100' as TradeSymbol, yahooSym: '%5ENDX' },
-      ];
-
-      await Promise.all(
-        tickers.map(async ({ sym, yahooSym }) => {
-          try {
-            const chartUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(
-              `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`
-            )}`;
-            const res = await this.fetchWithRetry(chartUrl);
-            const json = await res.json();
-            if (json?.contents) {
-              const body = JSON.parse(json.contents);
-              const meta = body?.chart?.result?.[0]?.meta;
-              if (meta) {
-                const price = parseFloat(meta.regularMarketPrice);
-                const prevClose = parseFloat(meta.chartPreviousClose || meta.previousClose);
-                if (!isNaN(price)) {
-                  updatedPrices[sym] = price;
-                  if (!isNaN(prevClose) && prevClose > 0) {
-                    updatedChanges[sym] = ((price - prevClose) / prevClose) * 100;
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.error(`Yahoo chart individual fallback failed for ${sym}:`, e);
-          }
-        })
-      );
-    }
-
+    // 3. Indices are streamed through the same Twelve Data WebSocket
+    // as XAU/USD. Do not call the /quote REST endpoint here.
+    // Repeated REST calls caused HTTP 429 rate-limit errors.
     // Apply fast prices
     this.updatePriceCache(updatedPrices, updatedChanges);
   }
 
-  // Slow Assets: Forex and Metals
+  // Slow Assets: Forex only. XAUUSD is streamed separately via Twelve Data.
   private async pollSlowAssets() {
-    const updatedPrices: Partial<Record<TradeSymbol, number>> = {};
-    const updatedChanges: Partial<Record<TradeSymbol, number>> = {};
-
-    try {
-      const response = await this.fetchWithRetry('https://open.er-api.com/v6/latest/USD');
-      const data = await response.json();
-      if (data?.rates) {
-        const rates = data.rates;
-        
-        if (rates.EUR) updatedPrices['EURUSD'] = 1 / rates.EUR;
-        if (rates.GBP) updatedPrices['GBPUSD'] = 1 / rates.GBP;
-        if (rates.JPY) updatedPrices['USDJPY'] = rates.JPY;
-        if (rates.CHF) updatedPrices['USDCHF'] = rates.CHF;
-        if (rates.CAD) updatedPrices['USDCAD'] = rates.CAD;
-        if (rates.AUD) updatedPrices['AUDUSD'] = 1 / rates.AUD;
-        if (rates.NZD) updatedPrices['NZDUSD'] = 1 / rates.NZD;
-        
-        if (rates.EUR && rates.JPY) updatedPrices['EURJPY'] = (1 / rates.EUR) * rates.JPY;
-        if (rates.GBP && rates.JPY) updatedPrices['GBPJPY'] = (1 / rates.GBP) * rates.JPY;
-      }
-    } catch (err) {
-      console.warn('ER-API Forex fetch failed, falling back to Frankfurter API:', err);
-      try {
-        const res = await this.fetchWithRetry('https://api.frankfurter.app/latest?from=USD');
-        const data = await res.json();
-        if (data?.rates) {
-          const rates = data.rates;
-          if (rates.EUR) updatedPrices['EURUSD'] = 1 / rates.EUR;
-          if (rates.GBP) updatedPrices['GBPUSD'] = 1 / rates.GBP;
-          if (rates.JPY) updatedPrices['USDJPY'] = rates.JPY;
-          if (rates.CHF) updatedPrices['USDCHF'] = rates.CHF;
-          if (rates.CAD) updatedPrices['USDCAD'] = rates.CAD;
-          if (rates.AUD) updatedPrices['AUDUSD'] = 1 / rates.AUD;
-          if (rates.NZD) updatedPrices['NZDUSD'] = 1 / rates.NZD;
-
-          if (rates.EUR && rates.JPY) updatedPrices['EURJPY'] = (1 / rates.EUR) * rates.JPY;
-          if (rates.GBP && rates.JPY) updatedPrices['GBPJPY'] = (1 / rates.GBP) * rates.JPY;
-        }
-      } catch (e) {
-        console.error('Frankfurter fallback also failed. Using existing cache for slow assets.', e);
-      }
-    }
-
-    // Apply slow prices
-    this.updatePriceCache(updatedPrices, updatedChanges);
+    // Forex and indices are streamed by Twelve Data.
+    return;
   }
 
   // Update in-memory cache and trigger listeners
@@ -470,14 +668,7 @@ class PriceService {
         const low = realPrice < prev.low ? realPrice : prev.low;
         
         let changePercent = prev.changePercent;
-        if (newChanges && newChanges[sym] !== undefined) {
-          changePercent = parseFloat(newChanges[sym]!.toFixed(2));
-        } else if (sym.endsWith('USD') && sym !== 'BTCUSD' && sym !== 'ETHUSD' && sym !== 'SOLUSD' && sym !== 'BNBUSD' && sym !== 'XRPUSD' && sym !== 'XAUUSD' && sym !== 'XAGUSD') {
-          // If slow forex change percent is missing, generate a tiny fluctuation to daily change
-          changePercent = parseFloat((changePercent + (Math.random() * 0.02 - 0.01)).toFixed(2));
-        }
-
-        this.prices[sym] = {
+this.prices[sym] = {
           bid,
           ask,
           lastPrice: realPrice,

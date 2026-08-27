@@ -30,8 +30,103 @@ export default function Trading() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [placing, setPlacing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<'All' | 'Metals' | 'Forex' | 'Crypto' | 'Indices'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<
+    'All' | 'Metals' | 'Forex' | 'Crypto' | 'Indices'
+  >('All');
+
+  const FORCE_FOREX_SYMBOLS = new Set([
+    'EURUSD',
+    'GBPUSD',
+    'USDJPY',
+    'USDCHF',
+    'USDCAD',
+    'AUDUSD',
+    'NZDUSD',
+    'EURJPY',
+    'GBPJPY',
+  ]);
   const [isChartFullScreen, setIsChartFullScreen] = useState(false);
+
+  const openChartPopout = () => {
+    const params = new URLSearchParams({
+      symbol: activeSymbol,
+    });
+    const popup = window.open(
+      `${window.location.origin}/trade/chart?${params.toString()}`,
+      'goldx-chart-popout',
+      'popup=yes,width=1400,height=850,left=120,top=60,resizable=yes,scrollbars=no'
+    );
+
+    if (!popup) {
+      setError('Chart pop-out was blocked by the browser. Please allow pop-ups for this site.');
+      return;
+    }
+
+    popup.focus();
+  };
+
+  // Independent desktop panel widths. The user can drag the separators
+  // to give more space to the watchlist/order window while the chart
+  // automatically takes the remaining width.
+  const [watchlistWidth, setWatchlistWidth] = useState(280);
+  const [orderWidth, setOrderWidth] = useState(340);
+
+  const startResize = (
+    type: 'watchlist' | 'order',
+    event: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (window.innerWidth < 1024) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    const startX = event.clientX;
+    const initialWidth =
+      type === 'watchlist' ? watchlistWidth : orderWidth;
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX;
+
+      if (type === 'watchlist') {
+        setWatchlistWidth(
+          Math.min(
+            420,
+            Math.max(220, initialWidth + delta)
+          )
+        );
+      } else {
+        // Dragging the separator between chart and order window:
+        // moving left increases order width, moving right decreases it.
+        setOrderWidth(
+          Math.min(
+            460,
+            Math.max(280, initialWidth - delta)
+          )
+        );
+      }
+    };
+
+    const handleUp = () => {
+      window.removeEventListener(
+        'pointermove',
+        handleMove
+      );
+      window.removeEventListener(
+        'pointerup',
+        handleUp
+      );
+    };
+
+    window.addEventListener(
+      'pointermove',
+      handleMove
+    );
+    window.addEventListener(
+      'pointerup',
+      handleUp,
+      { once: true }
+    );
+  };
 
   const formatCurrency = (val: number | undefined) => {
     if (val === undefined) return '$0.00';
@@ -107,9 +202,18 @@ export default function Trading() {
   };
 
   // Filter list of assets by selected category
-  const filteredSymbols = (Object.keys(MARKET_ASSETS) as Array<keyof typeof MARKET_ASSETS>).filter((sym) => {
+  const filteredSymbols = (
+    Object.keys(MARKET_ASSETS) as Array<keyof typeof MARKET_ASSETS>
+  ).filter((sym) => {
     if (selectedCategory === 'All') return true;
-    return MARKET_ASSETS[sym].category === selectedCategory;
+
+    if (selectedCategory === 'Forex') {
+      return FORCE_FOREX_SYMBOLS.has(sym);
+    }
+
+    return String(MARKET_ASSETS[sym].category)
+      .trim()
+      .toLowerCase() === selectedCategory.toLowerCase();
   });
 
   return (
@@ -168,12 +272,25 @@ export default function Trading() {
         </div>
       )}
 
-      {/* Main Panel Content Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Side: Asset Selector / List */}
-        <div className="lg:col-span-1 flex flex-col bg-zinc-950 border border-zinc-900 rounded-2xl p-4 h-[600px] overflow-hidden">
-          <h2 className="text-sm font-bold text-white mb-3 uppercase tracking-wider text-zinc-400 px-2">Market Watch</h2>
-          
+      {/* Independent Trading Workspace */}
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch">
+        {/* Watchlist */}
+        <section
+          className="relative flex flex-col shrink-0 bg-zinc-950 border border-zinc-900 rounded-2xl p-4 min-h-[520px] lg:h-[600px] overflow-hidden"
+          style={{
+            width: `min(100%, ${watchlistWidth}px)`,
+          }}
+        >
+          <div className="flex items-center justify-between mb-3 px-2 shrink-0">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider text-zinc-400">
+              Market Watch
+            </h2>
+
+            <span className="hidden lg:inline-flex text-[9px] uppercase tracking-widest text-zinc-700">
+              Drag edge
+            </span>
+          </div>
+
           {/* Category Tabs */}
           <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-900 mb-4 shrink-0 overflow-x-auto">
             {(['All', 'Metals', 'Forex', 'Crypto', 'Indices'] as const).map((cat) => (
@@ -221,8 +338,8 @@ export default function Trading() {
                 >
                   <div>
                     <span className={`font-bold font-mono text-sm block transition-colors duration-300 ${
-                      isSelected 
-                        ? 'text-amber-400 font-extrabold' 
+                      isSelected
+                        ? 'text-amber-400 font-extrabold'
                         : price.direction === 'up'
                           ? 'text-emerald-400'
                           : price.direction === 'down'
@@ -231,8 +348,11 @@ export default function Trading() {
                     }`}>
                       {sym}
                     </span>
-                    <span className="text-[10px] text-zinc-500 font-medium">{asset.name.split('vs')[0]}</span>
+                    <span className="text-[10px] text-zinc-500 font-medium">
+                      {asset.name.split('vs')[0]}
+                    </span>
                   </div>
+
                   <div className="text-right">
                     <span className={`font-mono font-bold text-xs block transition-colors duration-300 ${
                       price.direction === 'up'
@@ -243,65 +363,88 @@ export default function Trading() {
                     }`}>
                       {price.lastPrice.toFixed(asset.digits)}
                     </span>
+
                     <span className={`font-mono text-[10px] block mt-0.5 transition-colors duration-300 ${
                       price.direction === 'up'
                         ? 'text-emerald-400'
                         : price.direction === 'down'
                           ? 'text-rose-400'
-                          : price.changePercent >= 0 
-                            ? 'text-emerald-400/80' 
+                          : price.changePercent >= 0
+                            ? 'text-emerald-400/80'
                             : 'text-rose-500/80'
                     }`}>
-                      {price.changePercent >= 0 ? '+' : ''}{price.changePercent.toFixed(2)}%
+                      {price.changePercent >= 0 ? '+' : ''}
+                      {price.changePercent.toFixed(2)}%
                     </span>
                   </div>
                 </button>
               );
             })}
           </div>
-        </div>
 
-        {/* Center: TradingView Chart */}
-        <div className={`bg-zinc-950 border border-zinc-900 rounded-2xl p-4 flex flex-col transition-all duration-300 ${
-          isChartFullScreen 
-            ? 'fixed inset-0 z-50 h-screen w-screen p-6' 
-            : 'lg:col-span-2 h-[600px]'
-        }`}>
+          {/* Desktop resize handle */}
+          <div
+            onPointerDown={(event) =>
+              startResize('watchlist', event)
+            }
+            className="hidden lg:block absolute top-0 right-0 h-full w-2 translate-x-1/2 cursor-col-resize z-20"
+            title="Resize Market Watch"
+          >
+            <div className="mx-auto h-full w-px bg-transparent hover:bg-amber-500/60 transition-colors" />
+          </div>
+        </section>
+
+        {/* Chart */}
+        <section
+          className={`relative bg-zinc-950 border border-zinc-900 rounded-2xl p-4 flex flex-col min-w-0 ${
+            'flex-1 min-h-[520px] lg:h-[600px]'
+          }`}
+        >
           <div className="flex items-center justify-between mb-4 shrink-0">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider text-zinc-400 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Real-Time Chart {isChartFullScreen && `(${activeSymbol})`}
+              Real-Time Chart
             </h2>
+
             <div className="flex items-center gap-3">
-              <div className="text-xs text-zinc-500 font-medium hidden sm:block">Interactive TradingView Integration</div>
+              <div className="text-xs text-zinc-500 font-medium hidden sm:block">
+                Interactive TradingView Integration
+              </div>
+
               <button
-                onClick={() => setIsChartFullScreen(!isChartFullScreen)}
+                type="button"
+                onClick={openChartPopout}
                 className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all flex items-center gap-1.5 text-xs font-bold"
-                title={isChartFullScreen ? "Exit Fullscreen" : "Fullscreen View"}
+                title="Open chart in new window"
               >
-                {isChartFullScreen ? (
-                  <>
-                    <Minimize2 className="w-4 h-4 text-amber-400" />
-                    <span>Exit</span>
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="w-4 h-4 text-amber-400" />
-                    <span>Full Screen</span>
-                  </>
-                )}
+                <Maximize2 className="w-4 h-4 text-amber-400" />
+                <span>Pop Out</span>
               </button>
             </div>
           </div>
+
           <div className="flex-1 min-h-0">
             <TradingViewWidget symbol={activeSymbol} />
           </div>
-        </div>
+        </section>
 
-        {/* Right: Trading Control Panel */}
-        <div className="lg:col-span-1 bg-zinc-950 border border-zinc-900 rounded-2xl p-5 flex flex-col h-[600px] justify-between">
-          <div className="space-y-5">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider text-zinc-400">Trading Engine</h2>
+        {/* Order Window */}
+        <section
+          className="relative flex flex-col shrink-0 bg-zinc-950 border border-zinc-900 rounded-2xl p-5 min-h-[520px] lg:h-[600px] overflow-y-auto"
+          style={{
+            width: `min(100%, ${orderWidth}px)`,
+          }}
+        >
+          <div className="space-y-5 flex-1">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider text-zinc-400">
+                Trading Engine
+              </h2>
+
+              <span className="hidden lg:inline-flex text-[9px] uppercase tracking-widest text-zinc-700">
+                Drag edge
+              </span>
+            </div>
 
             {error && (
               <div className="p-3 bg-red-950/40 border border-red-500/20 rounded-xl text-red-200 text-xs flex items-start gap-2.5">
@@ -320,16 +463,24 @@ export default function Trading() {
             {/* Lot Size Selection */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Lot Size</label>
-                <span className="text-xs font-mono font-bold text-amber-500">Min 0.01 / Max 50.0</span>
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Lot Size
+                </label>
+                <span className="text-xs font-mono font-bold text-amber-500">
+                  Min 0.01 / Max 50.0
+                </span>
               </div>
+
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleLotsChange(lots - 0.1)}
+                  onClick={() =>
+                    handleLotsChange(lots - 0.1)
+                  }
                   className="px-3 bg-zinc-900 border border-zinc-800 text-zinc-300 font-bold rounded-lg text-sm hover:border-zinc-700 active:scale-95 transition-all"
                 >
                   -0.1
                 </button>
+
                 <input
                   id="trade-lots-input"
                   type="number"
@@ -337,71 +488,113 @@ export default function Trading() {
                   min="0.01"
                   max="50"
                   value={lots}
-                  onChange={(e) => handleLotsChange(parseFloat(e.target.value) || 0.01)}
+                  onChange={(e) =>
+                    handleLotsChange(
+                      parseFloat(e.target.value) ||
+                        0.01
+                    )
+                  }
                   className="flex-1 bg-zinc-950 text-white font-mono font-bold text-center border border-zinc-800 focus:border-amber-500 rounded-lg focus:outline-none text-sm py-2.5"
                 />
+
                 <button
-                  onClick={() => handleLotsChange(lots + 0.1)}
+                  onClick={() =>
+                    handleLotsChange(lots + 0.1)
+                  }
                   className="px-3 bg-zinc-900 border border-zinc-800 text-zinc-300 font-bold rounded-lg text-sm hover:border-zinc-700 active:scale-95 transition-all"
                 >
                   +0.1
                 </button>
               </div>
-              {/* Quick Preset Buttons */}
+
               <div className="flex gap-1.5 mt-2">
-                {[0.01, 0.1, 0.5, 1.0, 5.0, 10.0].map((preset) => (
-                  <button
-                    key={preset}
-                    onClick={() => handleLotsChange(preset)}
-                    className={`flex-1 text-[10px] font-bold py-1.5 rounded bg-zinc-900 border transition-all ${
-                      lots === preset ? 'border-amber-500/60 text-amber-400' : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
-                    }`}
-                  >
-                    {preset.toFixed(2)}
-                  </button>
-                ))}
+                {[0.01, 0.1, 0.5, 1.0, 5.0, 10.0].map(
+                  (preset) => (
+                    <button
+                      key={preset}
+                      onClick={() =>
+                        handleLotsChange(preset)
+                      }
+                      className={`flex-1 text-[10px] font-bold py-1.5 rounded bg-zinc-900 border transition-all ${
+                        lots === preset
+                          ? 'border-amber-500/60 text-amber-400'
+                          : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {preset.toFixed(2)}
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
             {/* SL / TP Panel */}
             <div className="space-y-3.5 pt-2">
               <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Stop Loss (Optional)</label>
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                  Stop Loss (Optional)
+                </label>
                 <input
                   id="trade-sl-input"
                   type="number"
                   step={activeAsset.pipSize}
-                  placeholder={`e.g. ${(activePrice ? activePrice.lastPrice * 0.99 : 0).toFixed(activeAsset.digits)}`}
+                  placeholder={`e.g. ${
+                    activePrice
+                      ? (
+                          activePrice.lastPrice *
+                          0.99
+                        ).toFixed(activeAsset.digits)
+                      : 0
+                  }`}
                   value={sl}
-                  onChange={(e) => setSl(e.target.value)}
+                  onChange={(e) =>
+                    setSl(e.target.value)
+                  }
                   className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 text-white font-mono text-sm placeholder-zinc-700 rounded-lg focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Take Profit (Optional)</label>
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                  Take Profit (Optional)
+                </label>
                 <input
                   id="trade-tp-input"
                   type="number"
                   step={activeAsset.pipSize}
-                  placeholder={`e.g. ${(activePrice ? activePrice.lastPrice * 1.01 : 0).toFixed(activeAsset.digits)}`}
+                  placeholder={`e.g. ${
+                    activePrice
+                      ? (
+                          activePrice.lastPrice *
+                          1.01
+                        ).toFixed(activeAsset.digits)
+                      : 0
+                  }`}
                   value={tp}
-                  onChange={(e) => setTp(e.target.value)}
+                  onChange={(e) =>
+                    setTp(e.target.value)
+                  }
                   className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 text-white font-mono text-sm placeholder-zinc-700 rounded-lg focus:outline-none"
                 />
               </div>
             </div>
 
-            {/* Pre-order Margin Feedback info box */}
+            {/* Pre-order Margin Feedback */}
             <div className="p-3.5 bg-zinc-900/40 border border-zinc-900 rounded-xl space-y-1.5 text-xs text-zinc-400">
               <div className="flex justify-between">
                 <span>Required Margin:</span>
-                <span className="font-mono font-bold text-zinc-200">{formatCurrency(calculatedMargin)}</span>
+                <span className="font-mono font-bold text-zinc-200">
+                  {formatCurrency(calculatedMargin)}
+                </span>
               </div>
+
               <div className="flex justify-between">
                 <span>Free Margin:</span>
-                <span className="font-mono font-bold text-amber-400">{formatCurrency(wallet?.freeMargin)}</span>
+                <span className="font-mono font-bold text-amber-400">
+                  {formatCurrency(wallet?.freeMargin)}
+                </span>
               </div>
+
               <div className="flex justify-between border-t border-zinc-800/60 pt-1.5 text-[11px] text-zinc-500">
                 <span>Account Leverage:</span>
                 <span className="font-bold">1:100</span>
@@ -409,8 +602,8 @@ export default function Trading() {
             </div>
           </div>
 
-          {/* Buy and Sell Action Buttons */}
-          <div className="space-y-3 pt-4 border-t border-zinc-900">
+          {/* Buy / Sell */}
+          <div className="space-y-3 pt-4 mt-4 border-t border-zinc-900">
             <div className="grid grid-cols-2 gap-3.5">
               <button
                 id="trade-buy-btn"
@@ -421,7 +614,12 @@ export default function Trading() {
                 <TrendingUp className="w-5 h-5 stroke-[2.5]" />
                 <span className="tracking-wide">BUY / LONG</span>
                 <span className="text-[10px] font-mono font-medium -mt-1 opacity-80">
-                  Ask: {activePrice ? activePrice.ask.toFixed(activeAsset.digits) : '—'}
+                  Ask:{' '}
+                  {activePrice
+                    ? activePrice.ask.toFixed(
+                        activeAsset.digits
+                      )
+                    : '—'}
                 </span>
               </button>
 
@@ -434,12 +632,28 @@ export default function Trading() {
                 <TrendingDown className="w-5 h-5 stroke-[2.5]" />
                 <span className="tracking-wide">SELL / SHORT</span>
                 <span className="text-[10px] font-mono font-medium -mt-1 opacity-80">
-                  Bid: {activePrice ? activePrice.bid.toFixed(activeAsset.digits) : '—'}
+                  Bid:{' '}
+                  {activePrice
+                    ? activePrice.bid.toFixed(
+                        activeAsset.digits
+                      )
+                    : '—'}
                 </span>
               </button>
             </div>
           </div>
-        </div>
+
+          {/* Desktop resize handle */}
+          <div
+            onPointerDown={(event) =>
+              startResize('order', event)
+            }
+            className="hidden lg:block absolute top-0 left-0 h-full w-2 -translate-x-1/2 cursor-col-resize z-20"
+            title="Resize Trading Engine"
+          >
+            <div className="mx-auto h-full w-px bg-transparent hover:bg-amber-500/60 transition-colors" />
+          </div>
+        </section>
       </div>
     </div>
   );

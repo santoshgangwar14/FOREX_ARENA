@@ -32,7 +32,7 @@ export type TradeSymbol =
   // Metals
   | 'XAUUSD'
   | 'XAGUSD'
-  // Forex
+  // GOLDX
   | 'EURUSD'
   | 'GBPUSD'
   | 'USDJPY'
@@ -56,7 +56,7 @@ export type TradeSymbol =
 export interface MarketAsset {
   symbol: TradeSymbol;
   name: string;
-  category: 'Metals' | 'Forex' | 'Crypto' | 'Indices';
+  category: 'Metals' | 'GOLDX' | 'Crypto' | 'Indices';
   contractSize: number;
   pipSize: number; // For pip & P/L calculation
   basePrice: number;

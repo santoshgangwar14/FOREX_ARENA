@@ -122,7 +122,7 @@ export default function Deposit() {
       {/* Title */}
       <div className="border-b border-zinc-900 pb-6">
         <h1 className="text-3xl font-bold tracking-tight text-white font-sans">Account Deposit</h1>
-        <p className="text-sm text-zinc-400 mt-1">Fund your demo trading balance via secure TRC20 USDT payments.</p>
+        <p className="text-sm text-zinc-400 mt-1">Fund your  trading balance via secure TRC20 USDT payments.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -141,7 +141,7 @@ export default function Deposit() {
 
             <div className="space-y-4 text-sm text-zinc-400">
               <p>
-                To fund your demo trading desk account, send the desired USDT TRC20 amount to the corporate escrow wallet address listed below. 
+                To fund your  trading desk account, send the desired USDT TRC20 amount to the corporate escrow wallet address listed below. 
               </p>
 
               <div className="bg-zinc-900/60 border border-zinc-850 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

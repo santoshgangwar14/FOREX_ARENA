@@ -36,11 +36,23 @@ export default function Register() {
     try {
       setError('');
       setLoading(true);
-      await signUp(email.trim(), password, displayName.trim());
+
+      await signUp(
+        email.trim(),
+        password,
+        displayName.trim()
+      );
+
       navigate('/email-verification');
     } catch (err: unknown) {
       console.error('Registration error:', err);
-      setError(getFirebaseUserMessage(err, 'We could not create your account. Please try again.'));
+
+      setError(
+        getFirebaseUserMessage(
+          err,
+          'We could not create your account. Please try again.'
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -64,9 +76,14 @@ export default function Register() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-yellow-500/10 border border-amber-500/30 text-amber-400 mb-4 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
             <Coins className="w-6 h-6" />
           </div>
+
           <h1 className="text-2xl font-bold tracking-tight text-white font-sans">
-            Join <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">ForexArena</span>
+            Join{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">
+              GoldxArena
+            </span>
           </h1>
+
           <p className="text-sm text-zinc-400 mt-2">
             Create your ForexArena trading account
           </p>
@@ -81,46 +98,126 @@ export default function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="register-name" className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Full Name</label>
+            <label
+              htmlFor="register-name"
+              className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2"
+            >
+              Full Name
+            </label>
+
             <div className="relative">
               <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input id="register-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="John Doe" className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200" disabled={loading} autoComplete="name" required />
+
+              <input
+                id="register-name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="John Doe"
+                className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200"
+                disabled={loading}
+                autoComplete="name"
+                required
+              />
             </div>
           </div>
 
           <div>
-            <label htmlFor="register-email" className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Email Address</label>
+            <label
+              htmlFor="register-email"
+              className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2"
+            >
+              Email Address
+            </label>
+
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input id="register-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@example.com" className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200" disabled={loading} autoComplete="email" required />
+
+              <input
+                id="register-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="john@example.com"
+                className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200"
+                disabled={loading}
+                autoComplete="email"
+                required
+              />
             </div>
           </div>
 
           <div>
-            <label htmlFor="register-password" className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Password</label>
+            <label
+              htmlFor="register-password"
+              className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2"
+            >
+              Password
+            </label>
+
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input id="register-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200" disabled={loading} autoComplete="new-password" required />
+
+              <input
+                id="register-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200"
+                disabled={loading}
+                autoComplete="new-password"
+                required
+              />
             </div>
           </div>
 
           <div>
-            <label htmlFor="register-confirm-password" className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Confirm Password</label>
+            <label
+              htmlFor="register-confirm-password"
+              className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2"
+            >
+              Confirm Password
+            </label>
+
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input id="register-confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter password" className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200" disabled={loading} autoComplete="new-password" required />
+
+              <input
+                id="register-confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                className="w-full pl-11 pr-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 transition-all duration-200"
+                disabled={loading}
+                autoComplete="new-password"
+                required
+              />
             </div>
           </div>
 
-          <button id="register-submit-btn" type="submit" disabled={loading} className="w-full mt-2 py-3.5 bg-[#D4AF37] hover:bg-[#F9E29B] text-[#050505] font-extrabold rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,175,55,0.15)] disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] cursor-pointer">
+          <button
+            id="register-submit-btn"
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 py-3.5 bg-[#D4AF37] hover:bg-[#F9E29B] text-[#050505] font-extrabold rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,175,55,0.15)] disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+          >
             {loading ? 'Creating Account...' : 'Create Account'}
+
             {!loading && <ArrowRight className="w-4 h-4" />}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-zinc-800/80 text-center text-sm text-zinc-400">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-amber-400 hover:text-amber-300 transition-colors">Sign In</Link>
+
+          <Link
+            to="/login"
+            className="font-medium text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            Sign In
+          </Link>
         </div>
       </motion.div>
     </div>

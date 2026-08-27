@@ -11,8 +11,8 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.email == 'santoshgangwar14@gmail.com' ||
         request.auth.token.email == 'SantoshGangwar14@gmail.com' ||
-        request.auth.token.email == 'admin@forexarena.com' ||
-        request.auth.token.email == 'Admin@forexarena.com'
+        request.auth.token.email == 'admin@goldxarena.com' ||
+        request.auth.token.email == 'Admin@goldxarena.com'
       );
     }
 
