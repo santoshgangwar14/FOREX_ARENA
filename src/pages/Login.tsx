@@ -1,7 +1,21 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  Link,
+  useNavigate,
+} from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, Coins, ArrowRight, AlertTriangle } from 'lucide-react';
+import {
+  Mail,
+  Lock,
+  Coins,
+  ArrowRight,
+  AlertTriangle,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
@@ -26,12 +40,16 @@ export default function Login() {
       setLoading(true);
 
       await logIn(email.trim(), password);
-      navigate('/');
-    } catch (err: any) {
+
+      // Successful login goes to the protected dashboard.
+      navigate('/dashboard', { replace: true });
+    } catch (err: unknown) {
       console.error('Login error:', err);
 
       setError(
-        err?.message || 'Failed to sign in. Please check your credentials.'
+        err instanceof Error
+          ? err.message
+          : 'Failed to sign in. Please check your credentials.'
       );
     } finally {
       setLoading(false);
